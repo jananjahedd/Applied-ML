@@ -67,7 +67,7 @@ The project uses the [Sleep-EDF Database](https://physionet.org/content/sleep-ed
 ## Usage
 1. **Activate the Anaconda environment**:
    ```bash
-   conda activate sleep-stage-detection
+   conda activate AML
    ```
 
 2. **Run the main script**:
