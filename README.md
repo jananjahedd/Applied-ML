@@ -13,7 +13,7 @@ This project aims to develop a classical machine learning model for automated sl
 ### Setup
 1. **Clone the repository**:
    ```bash
-   git https://github.com/jananjahedd/Applied-ML
+   git clone https://github.com/jananjahedd/Applied-ML
    ```
 
 2. **Set up the Anaconda environment**:
