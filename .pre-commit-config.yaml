@@ -39,3 +39,10 @@ repos:
         entry: python -m unittest discover tests
         language: python
         pass_filenames: false
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        args: [--strict, --show-error-codes]
+        additional_dependencies: [pandas, numpy, scikit-learn, mne]
