@@ -4,7 +4,7 @@ from src.main import hello_world
 
 
 class MainTest(unittest.TestCase):
-    def test_hello(self):
+    def test_hello(self) -> None:
         self.assertEqual(hello_world(), "Hello, World!")
 
 

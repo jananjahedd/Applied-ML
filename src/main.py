@@ -1,7 +1,7 @@
 """This is a sample Python script."""
 
 
-def hello_world():
+def hello_world() -> str:
     """Returns Hello, World!"""
     return "Hello, World!"
 
