@@ -1,0 +1,74 @@
+"""Recording class."""
+
+from enum import Enum
+from os import listdir
+from os.path import basename, dirname
+
+
+class StudyType(Enum):
+    """Study type enumeration."""
+
+    SC = "Cassette"
+    ST = "Telemetry"
+
+
+class Recording:
+    """Recording class.
+
+    Attributes:
+        file_path (str): File path of the recording
+        anno_path (str): Path to the annotation file
+        study_type (StudyType): Type of study (Cassette or Telemetry)
+        patient_number (int): Patient number
+        night (int): Night number
+    """
+
+    def __init__(self, file_path: str):
+        """Initialize the Recording class.
+
+        Args:
+            file_path (str): File path of the recording
+        """
+        self.file_path = file_path
+        file_name = basename(file_path)
+        directory = dirname(file_path)
+
+        if file_name.startswith("ST7"):  # Telemetry
+            # Files are named in the form ST7ssNJ0-PSG.edf where ss is the
+            # subject number, and N is the night.
+            self.study_type = StudyType.ST
+            self.patient_number = int(file_name.split("ST7")[1][:2])
+            self.night = int(file_name.split("ST7")[1][2:3])
+            self.anno_path = next(
+                directory + "/" + f
+                for f in listdir(directory)
+                if f.startswith(f"ST7{self.patient_number:02d}{self.night}")
+                and f.endswith("Hypnogram.edf")
+            )
+
+        elif file_name.startswith("SC4"):  # Cassette
+            # Files are named in the form SC4ssNEO-PSG.edf where ss is the
+            # subject number, and N is the night.
+            self.study_type = StudyType.SC
+            self.patient_number = int(file_name.split("SC4")[1][:2])
+            self.night = int(file_name.split("SC4")[1][2:3])
+            self.anno_path = next(
+                directory + "/" + f
+                for f in listdir(directory)
+                if f.startswith(f"SC4{self.patient_number:02d}{self.night}")
+                and f.endswith("Hypnogram.edf")
+            )
+
+        else:
+            raise ValueError("Unknown file name format")
+
+    def __str__(self) -> str:
+        """Return a string representation of the Recording class.
+
+        Returns:
+            str: String representation of the Recording class
+        """
+        return (
+            f"Recording: {self.study_type.value}, Patient-{self.patient_number}"
+            f", Night-{self.night}"
+        )
