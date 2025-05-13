@@ -18,7 +18,7 @@ except NameError:
 
 
 DATA_SUBFOLDER = "sleep-cassette"
-DATA_DIR = PROJECT_ROOT / "dataset" / DATA_SUBFOLDER
+DATA_DIR = PROJECT_ROOT / "Applied-ML" /"data" / DATA_SUBFOLDER
 PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data" / DATA_SUBFOLDER
 
 N_SUBJECTS_TO_PROCESS = 10
