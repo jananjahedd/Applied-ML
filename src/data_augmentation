@@ -1,0 +1,100 @@
+import numpy as np
+import mne
+import pathlib
+
+
+def info_log(message: str):
+    print(f"INFO: {message}")
+
+
+def warning_log(message: str):
+    print(f"WARNING: {message}")
+
+
+def error_log(message: str):
+    print(f"ERROR: {message}")
+
+
+try:
+    SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
+    PROJECT_ROOT = SCRIPT_DIR.parent.parent
+except NameError:
+    SCRIPT_DIR = pathlib.Path(".").resolve()
+    PROJECT_ROOT = SCRIPT_DIR.parent.parent
+    print(f"Warning: __file__ not found. Assuming script dir: {SCRIPT_DIR}")
+    print(f"Derived project root: {PROJECT_ROOT}")
+
+
+DATA_SUBFOLDER = "sleep-cassette"
+PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data" / DATA_SUBFOLDER
+### Data Augmentation Functions
+
+
+def gaussian_noise(epochs: np.ndarray, noise_level=0.16):
+    if epochs.ndim != 2:
+        raise ValueError(
+            f"epoch_data must have shape (n_channels, n_times), but got shape {epochs.shape}"
+        )
+    noise = np.random.normal(0, noise_level, epochs.shape)
+    noisy_eeg = epochs + noise
+    return noisy_eeg
+
+
+def sign_flip(epochs: np.ndarray):
+    if epochs.ndim != 2:
+        raise ValueError(
+            f"epoch_data must have shape (n_channels, n_times), but got shape {epochs.shape}"
+        )
+    return epochs * -1
+
+
+def time_reverse(epochs: np.ndarray):
+    if epochs.ndim != 2:
+        raise ValueError(
+            f"epoch_data must have shape (n_channels, n_times), but got shape {epochs.shape}"
+        )
+    reversed = np.flip(epochs, axis=1).copy()
+    return reversed
+
+
+### Load Preprocessed data
+
+info_log(f"Loading preprocessed data from: {PROCESSED_DATA_DIR}")
+
+processed_files = sorted(list(PROCESSED_DATA_DIR.glob("SC*-epo.fif")))
+
+if not processed_files:
+    error_log(
+        f"No epoch files (*-epo.fif) found in {PROCESSED_DATA_DIR}. "
+        "Please run the preprocessing script first."
+    )
+    exit()
+
+info_log(f"Found {len(processed_files)} subject files.")
+
+
+subjects_epochs = []
+subject_ids = []
+
+for filepath in processed_files:
+    try:
+        epochs = mne.read_epochs(filepath, preload=True, verbose=False)
+        if len(epochs) > 0:
+            subjects_epochs.append(epochs)
+
+            subject_id = filepath.stem.replace("-epo", "")
+            subject_ids.append(subject_id)
+            info_log(f"Loaded {len(epochs)} epochs for subject {subject_id}.")
+        else:
+            warning_log(f"Subject {filepath.stem} has zero epochs.")
+    except Exception as e:
+        error_log(f"Failed to load epochs from {filepath}: {e}.")
+
+if not subjects_epochs:
+    error_log("No epochs loaded successfully from any subject.")
+    exit()
+
+info_log(f"Successfully loaded epochs from {len(subjects_epochs)} subjects.")
+
+subject_data = list(zip(subject_ids, subjects_epochs))
+
