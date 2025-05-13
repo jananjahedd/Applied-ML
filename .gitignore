@@ -21,9 +21,6 @@ ipython_config.py
 ### macOS ###
 # General
 .DS_Store
-<<<<<<< HEAD
-data/
-=======
 .AppleDouble
 .LSOverride
 
@@ -243,4 +240,3 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,macos,visualstudiocode
->>>>>>> origin/split_augment
