@@ -1,6 +1,7 @@
 import numpy as np
 import mne
 import pathlib
+from sklearn.model_selection import LeaveOneGroupOut
 
 
 def info_log(message: str):
@@ -27,6 +28,7 @@ except NameError:
 
 DATA_SUBFOLDER = "sleep-cassette"
 PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data" / DATA_SUBFOLDER
+
 ### Data Augmentation Functions
 
 
@@ -98,3 +100,36 @@ info_log(f"Successfully loaded epochs from {len(subjects_epochs)} subjects.")
 
 subject_data = list(zip(subject_ids, subjects_epochs))
 
+print("Subject IDs and their corresponding epochs:")
+for subject_id, epochs in subject_data:
+    print(f"Subject ID: {subject_id}, Number of epochs: {len(epochs)}")
+
+# LOSO Split
+
+X = []
+y = []
+groups = []  # the subject that is left out
+
+sub_id_to_num = {subj_id: idx for idx, subj_id in enumerate(subject_ids)}
+
+for subject_id, epochs in subject_data:
+    subject_nr = sub_id_to_num[subject_id]
+    labels = epochs.events[:, -1]
+    X.append(epochs.get_data())
+    y.append(labels)
+    groups.append(np.full(len(labels), subject_nr))
+
+
+X = np.concatenate(X, axis=0)
+y = np.concatenate(y, axis=0)
+groups = np.concatenate(groups, axis=0)
+
+
+loso = LeaveOneGroupOut()
+
+info_log(f"Number of splits: {loso.get_n_splits(X, y, groups)}")
+
+
+for i, (train_index, test_index) in enumerate(loso.split(X, y, groups)):
+    X_train, X_test = X[train_index], X[test_index]
+    y_train, y_test = y[train_index], y[test_index]
