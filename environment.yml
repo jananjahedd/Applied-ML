@@ -5,7 +5,6 @@ channels:
 dependencies:
   - python=3.10
   - pip
-
   - numpy
   - pandas
   - matplotlib
@@ -15,3 +14,4 @@ dependencies:
   - pyedflib
   - requests
   - wget
+  - pre-commit
