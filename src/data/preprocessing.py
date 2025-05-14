@@ -18,10 +18,10 @@ from autoreject import get_rejection_threshold  # type: ignore
 
 try:
     SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent
+    PROJECT_ROOT = SCRIPT_DIR.parent.parent
 except NameError:
     SCRIPT_DIR = pathlib.Path(".").resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent
+    PROJECT_ROOT = SCRIPT_DIR.parent.parent
     print(f"Warning: __file__ not found. Assuming script dir: {SCRIPT_DIR}")
     print(f"Derived project root: {PROJECT_ROOT}")
 

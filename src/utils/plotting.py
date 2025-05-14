@@ -5,7 +5,7 @@ from typing import Optional
 
 import mne
 
-from src.recording import Recording
+from src.utils.recording import Recording
 
 
 def plot_signals_mne(
@@ -19,7 +19,8 @@ def plot_signals_mne(
     Args:
         recording (Recording): The recording object containing the file path.
         annotations (bool): Whether to plot the annotations.
-        raw (mne.io.BaseRaw): The raw object to plot. If None, it is read from the file.
+        raw (mne.io.BaseRaw): The raw object to plot. If None, it is read from
+        the file.
         channels (list): List of channel names to plot.
     """
     file_name = basename(recording.file_path)

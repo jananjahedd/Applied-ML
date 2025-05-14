@@ -1,6 +1,6 @@
 import unittest
 
-from src.main import hello_world
+from main import hello_world
 
 
 class MainTest(unittest.TestCase):
