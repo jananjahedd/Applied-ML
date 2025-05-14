@@ -17,32 +17,26 @@ try:
     print("INFO: imblearn library found. SMOTE is available.")
 except ImportError:
     print("WARNING: imblearn library not found. SMOTE will not be used. "
-          "To use SMOTE, please install imbalanced-learn")
-    ImbPipeline = SklearnPipeline
-    SMOTE = None
+          "To use SMOTE, please install imbalanced-learn: pip install imbalanced-learn")
+    ImbPipeline = SklearnPipeline 
+    SMOTE = None 
     imblearn_available = False
 
 ALL_FEATURE_NAMES = [
-    'Fpz-Cz_delta_RelP', 'Pz-Oz_delta_RelP', 'Fpz-Cz_theta_RelP',
-    'Pz-Oz_theta_RelP', 'Fpz-Cz_alpha_RelP', 'Pz-Oz_alpha_RelP',
-    'Fpz-Cz_sigma_RelP', 'Pz-Oz_sigma_RelP', 'Fpz-Cz_beta_RelP',
-    'Pz-Oz_beta_RelP', 'horizontal_Var', 'submental_Mean'
+    'Fpz-Cz_delta_RelP', 'Pz-Oz_delta_RelP', 'Fpz-Cz_theta_RelP', 'Pz-Oz_theta_RelP',
+    'Fpz-Cz_alpha_RelP', 'Pz-Oz_alpha_RelP', 'Fpz-Cz_sigma_RelP', 'Pz-Oz_sigma_RelP',
+    'Fpz-Cz_beta_RelP', 'Pz-Oz_beta_RelP', 'horizontal_Var', 'submental_Mean'
 ]
 SPLITS_DIR = "/Users/jananjahed/Desktop/ML_applied/Applied-ML/data_splits/sleep-cassette"
-
 
 def load_split_data(npz_file_path):
     try:
         data = np.load(npz_file_path, allow_pickle=True)
-        X_train, y_train, X_val, y_val, X_test, y_test = data['X_train'],
-        data['y_train'], data['X_val'], data['y_val'], data['X_test'],
-        data['y_test']
-
+        X_train, y_train, X_val, y_val, X_test, y_test = data['X_train'], data['y_train'], data['X_val'], data['y_val'], data['X_test'], data['y_test']
+        
         fusion_config = "unknown_config"
         if 'fusion_configuration' in data:
-            item = data['fusion_configuration'].item() if data[
-                'fusion_configuration'].ndim == 0 else data[
-                    'fusion_configuration']
+            item = data['fusion_configuration'].item() if data['fusion_configuration'].ndim == 0 else data['fusion_configuration']
             fusion_config = str(item)
         else:
             basename = os.path.basename(npz_file_path)
@@ -55,15 +49,13 @@ def load_split_data(npz_file_path):
             loaded_features = data['feature_names']
             if isinstance(loaded_features, np.ndarray) and loaded_features.ndim == 0 and isinstance(loaded_features.item(), list):
                 file_feature_names = loaded_features.item()
-            elif isinstance(loaded_features, np.ndarray):
+            elif isinstance(loaded_features, np.ndarray): 
                 file_feature_names = list(loaded_features)
-            elif isinstance(loaded_features, list):
+            elif isinstance(loaded_features, list): 
                 file_feature_names = loaded_features
             else:
-                try: 
-                    file_feature_names = list(loaded_features)
-                except TypeError: 
-                    file_feature_names = ALL_FEATURE_NAMES if X_train.shape[1] == len(ALL_FEATURE_NAMES) else None
+                try: file_feature_names = list(loaded_features)
+                except TypeError: file_feature_names = ALL_FEATURE_NAMES if X_train.shape[1] == len(ALL_FEATURE_NAMES) else None
         else:
             file_feature_names = ALL_FEATURE_NAMES if X_train.shape[1] == len(ALL_FEATURE_NAMES) else None
 
@@ -75,7 +67,6 @@ def load_split_data(npz_file_path):
         print(f"Error loading {npz_file_path}: {e}")
         return None, None, None, None, None, None, None, None, True
 
-
 def main_svm():
     split_files = glob.glob(os.path.join(SPLITS_DIR, "split_*.npz"))
     if not split_files:
@@ -83,8 +74,7 @@ def main_svm():
         return
     print(f"Found {len(split_files)} split files to process for SVM.")
 
-    results_by_config = defaultdict(lambda: {'accuracy': [], 'f1_macro': [],
-                                             'roc_auc_ovr': [], 'count': 0})
+    results_by_config = defaultdict(lambda: {'accuracy': [], 'f1_macro': [], 'roc_auc_ovr': [], 'count': 0})
     master_label_set = set()
 
     for i, split_file in enumerate(sorted(split_files)):
@@ -95,14 +85,11 @@ def main_svm():
             print(f"Skipping file {split_file}.")
             continue
         if file_feature_names is None:
-            print(f"Feature names undetermined for {split_file}")
+            print(f"Critical Error: Feature names undetermined for {split_file}. Skipping.")
             continue
-
-        y_train, y_val, y_test = y_train.astype(int), y_val.astype(int),
-        y_test.astype(int)
-        master_label_set.update(y_train)
-        master_label_set.update(y_val)
-        master_label_set.update(y_test)
+            
+        y_train, y_val, y_test = y_train.astype(int), y_val.astype(int), y_test.astype(int)
+        master_label_set.update(y_train); master_label_set.update(y_val); master_label_set.update(y_test)
 
         current_config_results = results_by_config[fusion_config]
         current_config_results['count'] += 1
@@ -111,52 +98,42 @@ def main_svm():
 
         X_train_svm, X_val_svm, X_test_svm = X_train_raw, X_val_raw, X_test_raw
         if X_train_svm.size == 0 or X_test_svm.size == 0:
-            print(f"Skipping SVM for this fold {fusion_config}.")
-            current_config_results['accuracy'].append(np.nan)
-            current_config_results['f1_macro'].append(np.nan)
-            current_config_results['roc_auc_ovr'].append(np.nan)
+            print(f"Skipping SVM for this fold (config: {fusion_config}): Empty train/test feature arrays.")
+            current_config_results['accuracy'].append(np.nan); current_config_results['f1_macro'].append(np.nan); current_config_results['roc_auc_ovr'].append(np.nan)
             continue
 
         n_features = X_train_svm.shape[1]
-        use_pca = n_features > 10
+        use_pca = n_features > 10 
 
         svm_pipeline_steps = [('scaler', StandardScaler())]
         if use_pca:
             num_pca_fit_samples = X_train_svm.shape[0] + (X_val_svm.shape[0] if X_val_svm.size > 0 else 0)
             max_pca_comps = min(num_pca_fit_samples, n_features)
             pca_n_components = 0.95
-            if max_pca_comps <= 1:
+            if max_pca_comps <=1:
                 use_pca = False
             if use_pca:
                 svm_pipeline_steps.append(('pca', PCA(n_components=pca_n_components, random_state=42)))
 
         if imblearn_available and SMOTE is not None:
             svm_pipeline_steps.append(('smote', SMOTE(random_state=42)))
-        svm_pipeline_steps.append(('svm', SVC(kernel='rbf', probability=True,
-                                              random_state=42,
-                                              class_weight='balanced')))
+        svm_pipeline_steps.append(('svm', SVC(kernel='rbf', probability=True, random_state=42, class_weight='balanced')))
 
         CurrentPipeline = ImbPipeline if 'smote' in dict(svm_pipeline_steps) else SklearnPipeline
         svm_pipeline = CurrentPipeline(svm_pipeline_steps)
 
-        svm_param_grid = {'svm__C': [0.1, 1, 10, 50], 'svm__gamma': [1e-4,
-                                                                     1e-3,
-                                                                     1e-2,
-                                                                     0.1,
-                                                                     'scale']}
+        svm_param_grid = {'svm__C': [0.1, 1, 10, 50], 'svm__gamma': [1e-4, 1e-3, 1e-2, 0.1, 'scale']}
 
         X_hp_train_svm = X_train_svm
         y_hp_train_svm = y_train
-        if X_val_svm.size > 0 and y_val.size > 0:
+        if X_val_svm.size > 0 and y_val.size > 0 :
             X_hp_train_svm = np.vstack((X_train_svm, X_val_svm))
             y_hp_train_svm = np.concatenate((y_train, y_val))
-        X_hp_train_svm, y_hp_train_svm = shuffle(X_hp_train_svm,
-                                                 y_hp_train_svm,
-                                                 random_state=42)
+        X_hp_train_svm, y_hp_train_svm = shuffle(X_hp_train_svm, y_hp_train_svm, random_state=42)
 
         best_svm = None
         if X_hp_train_svm.shape[0] < 5 or len(np.unique(y_hp_train_svm)) < 2:
-            print(f"Combined train+val for SVM too small. Fitting directly.")
+            print(f"Warning: Combined train+val for SVM too small. Fitting directly.")
             try:
                 svm_pipeline.fit(X_hp_train_svm, y_hp_train_svm)
                 best_svm = svm_pipeline
@@ -179,35 +156,28 @@ def main_svm():
                 try:
                     svm_pipeline.fit(X_hp_train_svm, y_hp_train_svm)
                     best_svm = svm_pipeline
-                except Exception as e: 
+                except Exception as e:
                     print(f"Error fitting SVM directly: {e}")
             else:
-                gs = GridSearchCV(svm_pipeline, svm_param_grid, cv=n_splits_cv,
-                                  scoring='f1_macro', n_jobs=-1,
-                                  error_score='raise')
-                try:
+                gs = GridSearchCV(svm_pipeline, svm_param_grid, cv=n_splits_cv, scoring='f1_macro', n_jobs=-1, error_score='raise')
+                try: 
                     gs.fit(X_hp_train_svm, y_hp_train_svm)
                     best_svm = gs.best_estimator_
                     print(f"Best SVM Params: {gs.best_params_}")
-                except Exception as e: 
+                except Exception as e:
                     print(f"Error in GridSearchCV for SVM: {e}")
                     best_svm = None
 
         if best_svm and X_test_svm.size > 0:
             y_pred = best_svm.predict(X_test_svm)
-            current_config_results['accuracy'].append(accuracy_score(y_test,
-                                                                     y_pred))
-            current_config_results['f1_macro'].append(f1_score(y_test, y_pred,
-                                                               average='macro',
-                                                               zero_division=0))
+            current_config_results['accuracy'].append(accuracy_score(y_test, y_pred))
+            current_config_results['f1_macro'].append(f1_score(y_test, y_pred, average='macro', zero_division=0))
 
             sorted_labels = sorted(list(master_label_set))
             try:
                 y_proba = best_svm.predict_proba(X_test_svm)
                 if len(np.unique(y_test)) > 1 and y_proba.shape[1] >= len(sorted_labels):
-                    roc_auc = roc_auc_score(y_test, y_proba, multi_class='ovr',
-                                            average='macro',
-                                            labels=sorted_labels)
+                    roc_auc = roc_auc_score(y_test, y_proba, multi_class='ovr', average='macro', labels=sorted_labels)
                     current_config_results['roc_auc_ovr'].append(roc_auc)
                 else:
                     current_config_results['roc_auc_ovr'].append(np.nan)
@@ -216,9 +186,7 @@ def main_svm():
                 print(f"SVM ROC AUC error: {e}")
 
             print(f"SVM Test Performance (Config: {fusion_config}, Fold: {os.path.basename(split_file)}):")
-            print(classification_report(y_test, y_pred, zero_division=0,
-                                        labels=sorted_labels,
-                                        target_names=[f"Class {l}" for l in sorted_labels]))
+            print(classification_report(y_test, y_pred, zero_division=0, labels=sorted_labels, target_names=[f"Class {l}" for l in sorted_labels]))
         else:
             current_config_results['accuracy'].append(np.nan)
             current_config_results['f1_macro'].append(np.nan)
@@ -233,7 +201,6 @@ def main_svm():
             print(f"  Mean ROC AUC (OVR Macro): {np.nanmean(results['roc_auc_ovr']):.4f} +/- {np.nanstd(results['roc_auc_ovr']):.4f}")
         else:
             print(f"\nNo valid results for SVM for configuration: {config_name}")
-
 
 if __name__ == '__main__':
     main_svm()
