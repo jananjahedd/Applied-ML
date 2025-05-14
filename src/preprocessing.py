@@ -1,24 +1,33 @@
+"""Module for preprocessing of sleep EDF data.
+
+This script includes functions for loading, filtering, epoching,
+and artifact rejection of PSG (polysomnography) recordings.
+It also provides utility functions for logging and plotting MNE-Python objects.
+The goal is to prepare the data for subsequent feature extraction and
+model training.
+"""
+
 import pathlib
 import time
 import traceback
-from typing import Optional
+from typing import Dict, Optional
 
 import mne
 import numpy as np
-from autoreject import get_rejection_threshold
+from autoreject import get_rejection_threshold  # type: ignore
 
 try:
     SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent.parent
+    PROJECT_ROOT = SCRIPT_DIR.parent
 except NameError:
     SCRIPT_DIR = pathlib.Path(".").resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent.parent
+    PROJECT_ROOT = SCRIPT_DIR.parent
     print(f"Warning: __file__ not found. Assuming script dir: {SCRIPT_DIR}")
     print(f"Derived project root: {PROJECT_ROOT}")
 
 
 DATA_SUBFOLDER = "sleep-cassette"
-DATA_DIR = PROJECT_ROOT / "Applied-ML" /"data" / DATA_SUBFOLDER
+DATA_DIR = PROJECT_ROOT / "data" / DATA_SUBFOLDER
 PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data" / DATA_SUBFOLDER
 
 N_SUBJECTS_TO_PROCESS = 10
@@ -54,21 +63,41 @@ EVENT_ID_MAP = {
 }
 
 
-def info_log(message: str):
+def info_log(message: str) -> None:
+    """Log an informational message.
+
+    :param message: The message string to log.
+    """
     print(f"INFO: {message}")
 
 
-def warning_log(message: str):
+def warning_log(message: str) -> None:
+    """Log a warning message.
+
+    :param message: The message string to log.
+    """
     print(f"WARNING: {message}")
 
 
-def error_log(message: str):
+def error_log(message: str) -> None:
+    """Log an error message.
+
+    :param message: The message string to log.
+    """
     print(f"ERROR: {message}")
 
 
 def bandpass_filter(
     raw: mne.io.BaseRaw, low_freq: float, high_freq: float, signal_type: str
 ) -> mne.io.BaseRaw:
+    """Apply a bandpass FIR filter to specified channel types in raw data.
+
+    :param raw: The MNE Raw object to filter.
+    :param low_freq: The lower cutoff frequency of the filter.
+    :param high_freq: The upper cutoff frequency of the filter.
+    :param signal_type: The type of signal to filter ('eeg', 'eog', 'emg').
+    :return: The filtered MNE Raw object.
+    """
     sfreq = raw.info["sfreq"]
     nyquist_freq = sfreq / 2.0
     effective_high_freq = high_freq
@@ -88,7 +117,7 @@ def bandpass_filter(
     elif signal_type == "emg":
         picks = mne.pick_types(raw.info, meg=False, emg=True, exclude="bads")
     else:
-        warning_log(f"Unknown signal type '{signal_type}' for bandpass " f"filtering.")
+        warning_log(f"Unknown signal type '{signal_type}' for bandpass filtering.")
         return raw
     if picks is not None and len(picks) > 0:
         try:
@@ -108,6 +137,13 @@ def bandpass_filter(
 
 
 def notch_filter(raw: mne.io.BaseRaw, freq: float, signal_type: str) -> mne.io.BaseRaw:
+    """Apply a notch FIR filter to specified channel types in raw data.
+
+    :param raw: The MNE Raw object to filter.
+    :param freq: The frequency to notch out.
+    :param signal_type: The type of signal to filter ('eeg', 'eog', 'emg').
+    :return: The filtered MNE Raw object.
+    """
     sfreq = raw.info["sfreq"]
     nyquist = sfreq / 2.0
     if freq >= nyquist:
@@ -140,9 +176,18 @@ def notch_filter(raw: mne.io.BaseRaw, freq: float, signal_type: str) -> mne.io.B
 def plot_signals_mne(
     raw: mne.io.BaseRaw,
     title: str = "Raw Signals",
-    scalings: Optional[dict] = None,
+    scalings: Optional[Dict[str, float]] = None,
     show_annotations: bool = True,
-):
+) -> None:
+    """Plot raw signals using MNE's interactive raw plotter.
+
+    :param raw: The MNE Raw object to plot.
+    :param title: The title of the plot, defaults to "Raw Signals".
+    :param scalings: Dictionary of channel type scalings for plotting,
+                     e.g., {'eeg': 75e-6}. Defaults to MNE's default if None.
+    :param show_annotations: Whether to attempt to plot annotations as events,
+                             defaults to True.
+    """
     if scalings is None:
         scalings = dict(eeg=75e-6, eog=150e-6, emg=100e-6, misc=1e-3)
     plot_kwargs = {
@@ -162,7 +207,7 @@ def plot_signals_mne(
         5: "purple",
         0: "gray",
     }
-    if show_annotations and raw.annotations is not None and len(raw.annotations) > 0:
+    if (show_annotations and raw.annotations is not None and len(raw.annotations)) > 0:
         try:
             events_from_annot, event_dict_from_annot_mapping = (
                 mne.events_from_annotations(
@@ -180,7 +225,7 @@ def plot_signals_mne(
                 plot_kwargs["event_id"] = current_plot_event_id
                 plot_kwargs["event_color"] = {
                     val: plot_event_color[val]
-                    for val in current_plot_event_id.values()
+                    for val in current_plot_event_id.keys()
                     if val in plot_event_color
                 }
         except ValueError as ve:
@@ -197,8 +242,16 @@ def plot_epochs_mne(
     epochs: mne.Epochs,
     title: str = "Epochs Plot",
     n_epochs: int = 5,
-    scalings: Optional[dict] = None,
-):
+    scalings: Optional[Dict[str, float]] = None,
+) -> None:
+    """Plot epoched data using MNE's interactive epochs plotter.
+
+    :param epochs: The MNE Epochs object to plot.
+    :param title: The title of the plot, defaults to "Epochs Plot".
+    :param n_epochs: The number of epochs to display simultaneously.
+    :param scalings: Dictionary of channel type scalings for plotting.
+                     Defaults to MNE's default if None.
+    """
     if scalings is None:
         scalings = dict(eeg=75e-6, eog=150e-6, emg=100e-6, misc=1e-3)
     plot_event_color = {
@@ -238,10 +291,10 @@ if __name__ == "__main__":
     all_psg_files = []
     try:
         if not DATA_DIR.is_dir():
-            raise FileNotFoundError(f"Data directory does not exist: " f"{DATA_DIR}")
+            raise FileNotFoundError(f"Data directory does not exist: {DATA_DIR}")
         all_psg_files = sorted(list(DATA_DIR.glob("SC*-PSG.edf")))
         if not all_psg_files:
-            error_log(f"No PSG files matching 'SC*-PSG.edf' found in " f"{DATA_DIR}.")
+            error_log(f"No PSG files matching 'SC*-PSG.edf' found in {DATA_DIR}.")
             exit()
         info_log(f"Found {len(all_psg_files)} PSG files.")
     except FileNotFoundError as e:
@@ -280,7 +333,9 @@ if __name__ == "__main__":
             if not (
                 base_id.startswith("SC") and len(base_id) == 6 and base_id[2:].isdigit()
             ):
-                raise ValueError(f"Unexpected subject ID format for glob: {subject_id}")
+                raise ValueError(
+                    "Unexpected subject ID format for " + f"glob: {subject_id}"
+                )
 
             hypno_files_found = list(DATA_DIR.glob(f"{base_id}*-Hypnogram.edf"))
 
@@ -300,23 +355,27 @@ if __name__ == "__main__":
                 if best_match:
                     hypno_file_path = best_match
                     warning_log(
-                        f"Multiple hypnos for {base_id}, used suffix match: {hypno_file_path.name}"
+                        f"Multiple hypnos for {base_id}, used suffix "
+                        + f"match: {hypno_file_path.name}"
                     )
                 else:
                     hypno_file_path = hypno_files_found[0]
                     warning_log(
-                        f"Multiple hypnos for {base_id}, used first found: {hypno_file_path.name}"
+                        f"Multiple hypnos for {base_id}, used first "
+                        + f"found: {hypno_file_path.name}"
                     )
             else:
                 warning_log(
-                    f"No hypnogram file matching pattern '{base_id}*-Hypnogram.edf' found for {subject_id}."
+                    "No hypnogram file matching pattern "
+                    + f"'{base_id}*-Hypnogram.edf' found for {subject_id}."
                 )
 
         except ValueError as ve_glob:
             error_log(f"Error parsing ID for hypnogram search (glob): {ve_glob}")
         except Exception as e_glob:
             error_log(
-                f"Error searching for hypnogram file for {subject_id} (glob): {e_glob}"
+                f"Error searching for hypnogram file for {subject_id} "
+                + f"(glob): {e_glob}"
             )
 
         file_name_base = subject_id
@@ -351,7 +410,8 @@ if __name__ == "__main__":
                         info_log(f"Set type '{eog_channel_name}' to 'eog'.")
                 except Exception as e:
                     warning_log(
-                        f"Could not set channel type for '" f"{eog_channel_name}': {e}"
+                        f"Could not set channel type for '{eog_channel_name}"
+                        + f"': {e}"
                     )
 
             if hypno_file_path is not None:
@@ -467,7 +527,7 @@ if __name__ == "__main__":
                 failed_subjects.append(subject_id)
                 continue
             initial_epoch_count = len(epochs)
-            info_log(f"Initial epoch count before rejection: " f"{initial_epoch_count}")
+            info_log(f"Initial epoch count before rejection: {initial_epoch_count}")
 
             info_log("Applying Global Autoreject")
             epochs_clean = epochs.copy()
@@ -491,7 +551,8 @@ if __name__ == "__main__":
                     final_reject_dict.update(ar_reject_dict)
                 else:
                     warning_log(
-                        "get_rejection_threshold did not return EEG/EOG thresholds."
+                        "get_rejection_threshold did not return "
+                        + "EEG/EOG thresholds."
                     )
                 emg_picks = mne.pick_types(
                     epochs.info,
@@ -503,12 +564,12 @@ if __name__ == "__main__":
                 )
                 if len(emg_picks) > 0:
                     info_log(
-                        f"Adding fixed EMG threshold: " f"{FIXED_EMG_THRESHOLD:.2e} V"
+                        "Adding fixed EMG threshold: " + f"{FIXED_EMG_THRESHOLD:.2e} V"
                     )
                     final_reject_dict["emg"] = FIXED_EMG_THRESHOLD
 
                 if final_reject_dict:
-                    info_log(f"Applying combined thresholds: " f"{final_reject_dict}")
+                    info_log("Applying combined thresholds: " + f"{final_reject_dict}")
                     epochs_clean.drop_bad(reject=final_reject_dict, verbose=False)
                     applied_method = "Global AR (EEG/EOG) + Fixed (EMG)"
                 else:
@@ -561,9 +622,7 @@ if __name__ == "__main__":
                     failed_subjects.append(subject_id)
 
         except Exception as e:
-            error_log(
-                f"!! UNEXPECTED error processing subject {subject_id}: " f"{e} !!"
-            )
+            error_log(f"!! UNEXPECTED error processing subject {subject_id}: {e} !!")
             traceback.print_exc()
             failed_subjects.append(subject_id)
             continue

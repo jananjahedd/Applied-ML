@@ -1,5 +1,7 @@
 # Manually ignored rules
 data/
+processed_data/
+data_splits/
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,macos,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks,macos,visualstudiocode
@@ -143,7 +145,8 @@ target/
 #   However, in case of collaboration, if having platform-specific dependencies or dependencies
 #   having no cross-platform support, pipenv may install dependencies that don't work, or not
 #   install all needed dependencies.
-#Pipfile.lock
+Pipfile.lock
+Pipfile
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
