@@ -114,7 +114,9 @@ def main_lr():
 
     print(f"Found {len(split_files)} split files to process for Logistic Regression.")
 
-    results_by_config = defaultdict(lambda: {'accuracy': [], 'f1_macro': [], 'roc_auc_ovr': [], 'reports': [], 'conf_matrices': [], 'count': 0})
+    results_by_config = defaultdict(lambda: {'accuracy': [], 'f1_macro': [],
+                                             'roc_auc_ovr': [], 'reports': [],
+                                             'conf_matrices': [], 'count': 0})
     master_label_set = set()
 
 
@@ -181,7 +183,7 @@ def main_lr():
                   f"{X_hp_train_lr.shape[0]} samples, "
                   f"{len(np.unique(y_hp_train_lr))} classes).")
             try:
-                lr_pipeline.fit(X_hp_train_lr, y_hp_train_lr);
+                lr_pipeline.fit(X_hp_train_lr, y_hp_train_lr)
                 best_lr = lr_pipeline
             except Exception as e:
                 print(f"Error fitting LR directly: {e}")
