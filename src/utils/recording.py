@@ -69,6 +69,6 @@ class Recording:
             str: String representation of the Recording class
         """
         return (
-            f"Recording: {self.study_type.value}, Patient-{self.patient_number}"
-            f", Night-{self.night}"
+            f"Recording: {self.study_type.value}, Patient-"
+            f"{self.patient_number}, Night-{self.night}"
         )

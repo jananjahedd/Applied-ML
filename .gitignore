@@ -1,5 +1,6 @@
 # Manually ignored rules
 data/
+!src/data
 processed_data/
 data_splits/
 
