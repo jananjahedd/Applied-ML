@@ -23,7 +23,7 @@ from src.features.feature_engineering import FeatureEngineering
 from src.utils.logger import get_logger
 
 # setup logger
-logger = get_logger(__name__)
+logger = get_logger("LOSO")
 
 
 try:
@@ -422,7 +422,7 @@ for i, (train_idx, test_idx) in enumerate(loso.split(X, y, groups)):
                 )
                 if not np.array_equal(y_ft_val, y_val_cv):
                     logger.warning(
-                        "y_ft_val label mismatch with y_val_cv" f" for '{config}'!"
+                        "y_ft_val label mismatch with y_val_cv" + f" for '{config}'!"
                     )
             else:
                 logger.error(
