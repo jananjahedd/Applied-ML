@@ -10,8 +10,12 @@ from typing import Dict, List, Union, cast
 
 import mne
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
 from sklearn.model_selection import LeaveOneGroupOut, train_test_split  # type: ignore
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import LinearSVC
 
 from src.data.data_augmentation import (
     create_epochs_from_numpy,
@@ -381,6 +385,39 @@ for i, (train_idx, test_idx) in enumerate(loso.split(X, y, groups)):
                         "y_ft_train label mismatch with y_train_aug"
                         + f" for '{config}'!"
                     )
+                # CORRELATION BETWEEN FEATURES AND TARGET AND DROP THE OTHER ONES
+                # check for feature importance by training SVMs
+                clf = make_pipeline(
+                    StandardScaler(), LinearSVC(C=1.0, max_iter=10000, random_state=42)
+                )
+                clf.fit(X_ft_train, y_ft_train)
+
+                svm = clf.named_steps["linearsvc"]
+                coefs = svm.coef_
+
+                importances = np.mean(np.abs(coefs), axis=0)
+
+                feat_imp = pd.Series(importances, index=feature_names)
+                feat_imp = feat_imp.sort_values(ascending=False)
+
+                logger.info(
+                    f"Top 10 features for split {i}, config {config}:"
+                    + f"\n{feat_imp.head(10)}"
+                )
+                df_train = pd.DataFrame(X_ft_train, columns=feature_names)
+                corr_matrix = df_train.corr().abs()
+
+                # find pairs that exceed 0.9
+                high_corr = np.where(np.triu(corr_matrix.values, k=1) > 0.90)
+                pairs = [
+                    (feature_names[i], feature_names[j], corr_matrix.values[i, j])
+                    for i, j in zip(*high_corr)
+                ]
+                if pairs:
+                    logger.warning(
+                        f"Highly correlated features (>0.9) in this"
+                        + f" split: {pairs}"
+                    )
             else:
                 logger.error(
                     "Failed to create MNE Epochs for "
@@ -475,6 +512,29 @@ for i, (train_idx, test_idx) in enumerate(loso.split(X, y, groups)):
                 f"Test set (X_test_subset) for '{config}' is empty."
                 + " No TEST features extracted."
             )
+
+        # drop correlated features
+        to_drop = set()
+        for f1, f2, _ in pairs:
+            drop = f1 if feat_imp[f1] < feat_imp[f2] else f2
+            to_drop.add(drop)
+
+        if to_drop:
+            logger.info(f"Dropping {len(to_drop)} correlated features:" + f" {to_drop}")
+            original_features = current_split_features
+            keep_idx = [i for i, f in enumerate(original_features) if f not in to_drop]
+            final_feature_names = [f for f in original_features if f not in to_drop]
+
+            if X_ft_train.size > 0:
+                X_ft_train = X_ft_train[:, keep_idx]
+            if X_ft_val.size > 0:
+                X_ft_val = X_ft_val[:, keep_idx]
+            if X_ft_test.size > 0:
+                X_ft_test = X_ft_test[:, keep_idx]
+
+            logger.info(f"Features kept: {final_feature_names}")
+        else:
+            final_feature_names = current_split_features
 
         num_active_features = len(current_split_features)
         if X_ft_train.size == 0 and X_train_aug.shape[0] == 0:

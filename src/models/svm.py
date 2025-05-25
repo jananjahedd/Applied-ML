@@ -172,8 +172,7 @@ def load_split_data(npz_file_path: str) -> ProcessedData:
                     file_feature_names = list(map(str, loaded_features))
                 except TypeError:
                     logger.error(
-                        "Error: Could not convert 'feature_names'."
-                        + "Fallback needed."
+                        "Error: Could not convert 'feature_names'." + "Fallback needed."
                     )
                     if (
                         X_train is not None
@@ -183,8 +182,7 @@ def load_split_data(npz_file_path: str) -> ProcessedData:
                         file_feature_names = ALL_FEATURE_NAMES
         else:
             logger.warning(
-                f"'feature_names' not in {npz_file_path}."
-                + " Fallback attempted."
+                f"'feature_names' not in {npz_file_path}." + " Fallback attempted."
             )
             if (
                 X_train is not None
@@ -198,6 +196,7 @@ def load_split_data(npz_file_path: str) -> ProcessedData:
                 "X_train or y_train is missing or" + f" empty in {npz_file_path}."
             )
             return (None, None, None, None, None, None, None, fusion_config, True)
+
         return (
             X_train,
             y_train,
@@ -406,8 +405,9 @@ def main_svm() -> None:
                     )
                     min_samples_class = np.min(counts) if len(counts) > 0 else 0
 
-            if ("smote" in svm_pipeline.named_steps and
-                    SMOTE is not None):  # type: ignore
+            if (
+                "smote" in svm_pipeline.named_steps and SMOTE is not None
+            ):  # type: ignore
                 k_val = min(5, min_samples_class - 1) if min_samples_class > 1 else 1
                 if k_val < 1:
                     logger.info(
