@@ -8,7 +8,7 @@ import glob
 import os
 import pathlib
 from collections import defaultdict
-from typing import DefaultDict, List, Optional, Set, Tuple, Union
+from typing import DefaultDict, List, Optional, Set, Tuple, TypedDict, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -86,6 +86,15 @@ ProcessedData = Tuple[
     str,
     bool,
 ]
+
+
+class ResultMetrics(TypedDict):
+    """TypedDict for storing SVM result metrics."""
+
+    accuracy: List[float]
+    f1_macro: List[float]
+    roc_auc_ovr: List[float]
+    count: int
 
 
 def load_split_data(npz_file_path: str) -> ProcessedData:
