@@ -8,6 +8,8 @@ from typing import List, Tuple
 import mne
 import numpy as np
 from numpy.typing import NDArray
+from sklearn.preprocessing import StandardScaler
+from sklearn.exceptions import NotFittedError
 
 from src.utils.logger import get_logger
 
@@ -40,16 +42,10 @@ class FeatureEngineering:
     and mean of absolute values for EMG.
     """
 
-    def __init__(self, epochs: mne.Epochs) -> None:
-        """Initialize the feature engineering class.
-
-        :param epochs: the preprocessed epochs object.
-        """
-        logger.info(
-            "Starting feature engineering process for " + f"{len(epochs)} epochs/"
-        )
-        self.epochs = epochs
-        self.ch_types = self.epochs.info.get_channel_types(unique=True)
+    def __init__(self) -> None:
+        """Initialize the feature engineering class."""
+        self.scaler_: StandardScaler | None = None
+        self.feature_names_: List[str] = []
 
     def _calculate_sef(
         self,
@@ -73,9 +69,8 @@ class FeatureEngineering:
         for i in range(psds.shape[0]):
             for j in range(psds.shape[1]):
                 power_threshold = total_power[i, j] * percentage
-                found_indices = np.where(cumulative_power[i, j, :] >= power_threshold)[
-                    0
-                ]
+                found_indices = np.where(
+                    cumulative_power[i, j, :] >= power_threshold)[0]
                 if len(found_indices) > 0:
                     sef_indices[i, j] = found_indices[0]
                 else:
@@ -114,9 +109,10 @@ class FeatureEngineering:
 
         return mobility, complexity
 
-    def feature_extraction(self) -> ExtractedFeatures:
+    def _extract_features(self, epochs: mne.Epochs) -> ExtractedFeatures:
         """Extract features from the epochs.
 
+        :param epochs: the epochs to extract features from.
         :return: Tuple of features, labels, and feature names.
         """
         logger.info("Extracting features from epochs...")
@@ -125,19 +121,21 @@ class FeatureEngineering:
         feature_names: List[str] = []
 
         # common PSD parameters
-        n_fft = int(self.epochs.info["sfreq"] * 2)
+        n_fft = int(epochs.info["sfreq"] * 2)
         n_overlap = n_fft // 2
+        ch_types = epochs.info.get_channel_types(unique=True)
 
-        if "eeg" in self.ch_types:
-            eeg_picks = mne.pick_types(self.epochs.info, eeg=True, exclude="bads")
+        if "eeg" in ch_types:
+            eeg_picks = mne.pick_types(epochs.info, eeg=True, exclude="bads")
             if len(eeg_picks) > 0:
-                eeg_ch_names = [self.epochs.ch_names[i] for i in eeg_picks]
+                eeg_ch_names = [epochs.ch_names[i] for i in eeg_picks]
                 logger.info(
-                    "Extracting EEG features from " + f"channels: {eeg_ch_names}"
+                    "Extracting EEG features from "
+                    + f"channels: {eeg_ch_names}"
                 )
 
                 # EEG: PSD-based features (Relative Band Powers, SEF95)
-                spectrum_eeg = self.epochs.compute_psd(
+                spectrum_eeg = epochs.compute_psd(
                     method="welch",
                     picks=eeg_picks,
                     fmin=FMIN,
@@ -158,8 +156,10 @@ class FeatureEngineering:
                         (freqs_eeg >= fmin_band) & (freqs_eeg < fmax_band)
                     )[0]
                     if len(band_indices) > 0:
-                        abs_band_power = np.sum(psds_eeg[:, :, band_indices], axis=2)
-                        rel_band_power = abs_band_power / total_power_eeg[:, :, 0]
+                        abs_band_power = np.sum(
+                            psds_eeg[:, :, band_indices], axis=2)
+                        rel_band_power = (
+                            abs_band_power / total_power_eeg[:, :, 0])
 
                         for i, ch_name in enumerate(eeg_ch_names):
                             all_features_list.append(rel_band_power[:, i])
@@ -171,13 +171,14 @@ class FeatureEngineering:
                         )
 
                 # EEG: Spectral Edge Frequency (SEF95)
-                sef95_eeg = self._calculate_sef(psds_eeg, freqs_eeg, percentage=0.95)
+                sef95_eeg = self._calculate_sef(
+                    psds_eeg, freqs_eeg, percentage=0.95)
                 for i, ch_name in enumerate(eeg_ch_names):
                     all_features_list.append(sef95_eeg[:, i])
                     feature_names.append(f"{ch_name}_SEF95")
 
                 # EEG: Time-domain features (Hjorth Parameters)
-                eeg_data = self.epochs.get_data(picks=eeg_picks)
+                eeg_data = epochs.get_data(picks=eeg_picks)
                 mobility_eeg, complexity_eeg = self._calculate_hjorth(eeg_data)
 
                 for i, ch_name in enumerate(eeg_ch_names):
@@ -191,12 +192,13 @@ class FeatureEngineering:
                     + " feature extraction."
                 )
 
-        if "eog" in self.ch_types:
-            eog_picks = mne.pick_types(self.epochs.info, eog=True, exclude="bads")
+        if "eog" in ch_types:
+            eog_picks = mne.pick_types(epochs.info, eog=True, exclude="bads")
             if len(eog_picks) > 0:
-                eog_ch_names = [self.epochs.ch_names[i] for i in eog_picks]
-                logger.info(f"Extracting EOG features from channels: {eog_ch_names}")
-                eog_data_time = self.epochs.get_data(picks=eog_picks)
+                eog_ch_names = [epochs.ch_names[i] for i in eog_picks]
+                logger.info(
+                    f"Extracting EOG features from channels: {eog_ch_names}")
+                eog_data_time = epochs.get_data(picks=eog_picks)
 
                 # EOG: Variance
                 for i, ch_name in enumerate(eog_ch_names):
@@ -205,7 +207,7 @@ class FeatureEngineering:
                     feature_names.append(f"{ch_name}_Var")
 
                 # EOG: Relative Delta Power
-                spectrum_eog = self.epochs.compute_psd(
+                spectrum_eog = epochs.compute_psd(
                     method="welch",
                     picks=eog_picks,
                     fmin=FMIN,
@@ -231,7 +233,8 @@ class FeatureEngineering:
                     abs_delta_power_eog = np.sum(
                         psds_eog[:, :, delta_indices_eog], axis=2
                     )
-                    rel_delta_power_eog = abs_delta_power_eog / total_power_eog[:, :, 0]
+                    rel_delta_power_eog = (
+                        abs_delta_power_eog / total_power_eog[:, :, 0])
                     for i, ch_name in enumerate(eog_ch_names):
                         all_features_list.append(rel_delta_power_eog[:, i])
                         feature_names.append(f"{ch_name}_Delta_RelP")
@@ -246,16 +249,18 @@ class FeatureEngineering:
                     + " feature extraction."
                 )
 
-        if "emg" in self.ch_types:
-            emg_picks = mne.pick_types(self.epochs.info, emg=True, exclude="bads")
+        if "emg" in ch_types:
+            emg_picks = mne.pick_types(epochs.info, emg=True, exclude="bads")
             if len(emg_picks) > 0:
-                emg_ch_names = [self.epochs.ch_names[i] for i in emg_picks]
-                logger.info(f"Extracting EMG features from channels: {emg_ch_names}")
-                emg_data_time = self.epochs.get_data(picks=emg_picks)
+                emg_ch_names = [epochs.ch_names[i] for i in emg_picks]
+                logger.info(
+                    f"Extracting EMG features from channels: {emg_ch_names}")
+                emg_data_time = epochs.get_data(picks=emg_picks)
 
                 # EMG: Mean of absolute values
                 for i, ch_name in enumerate(emg_ch_names):
-                    emg_mean_abs = np.mean(np.abs(emg_data_time[:, i, :]), axis=1)
+                    emg_mean_abs = np.mean(
+                        np.abs(emg_data_time[:, i, :]), axis=1)
                     all_features_list.append(emg_mean_abs)
                     feature_names.append(f"{ch_name}_MeanAbs")
             else:
@@ -266,17 +271,18 @@ class FeatureEngineering:
 
         if not all_features_list:
             logger.error(
-                "No features were extracted. Please check channel" + "types and data."
+                "No features were extracted. Please check channel"
+                + "types and data."
             )
             return (
-                np.array([]).reshape(len(self.epochs), 0),
-                self.epochs.events[:, -1],
+                np.array([]).reshape(len(epochs), 0),
+                epochs.events[:, -1],
                 [],
             )
 
         X = np.column_stack(all_features_list)
 
-        y = self.epochs.events[:, -1]
+        y = epochs.events[:, -1]
         logger.info(
             f"Successfully extracted {X.shape[1]} "
             + f"features for {X.shape[0]} epochs."
@@ -284,6 +290,53 @@ class FeatureEngineering:
         logger.info(f"Feature names: {feature_names}")
 
         return X, y, feature_names
+
+    def fit(self, epochs_train: mne.Epochs) -> ExtractedFeatures:
+        """Fits the feature engineering pipeline to the training data.
+
+        This method extracts the raw features from the training epochs,
+        and learns the normalization parameters from these raw features.
+
+        :param epochs_train: the MNE Epochs object for the training set.
+        :return: a tuple of (scaled_features, labels, feature_names).
+        """
+        logger.info("Fitting the scaler on the training data.")
+
+        # extract raw features
+        X_train, y_train, feature_names = self._extract_features(epochs_train)
+        self.feature_names_ = feature_names
+
+        self.scaler_ = StandardScaler()
+        self.scaler_.fit(X_train)
+        logger.info("Scaler has been fitted.")
+
+        X_train_scaled = self.scaler_.transform(X_train)
+
+        return X_train_scaled, y_train, self.feature_names_
+
+    def transform(self,
+                  epochs: mne.Epochs
+                  ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Applies the fitted feature engineering pipeline to new data.
+
+        This method extracts raw features from the new epochs, and applies
+        the pre-learned normalization using the stored scaler.
+
+        :param epochs: the MNE Epochs object to transform (val and test sets)
+        :return: a tuple of (scaled_features, labels).
+        """
+        if self.scaler_ is None:
+            raise NotFittedError(
+                "This FeatureEngineering instance is not fitted yet."
+                + "Call 'fit' with training data before using 'transform'."
+            )
+
+        logger.info(f"Transforming {len(epochs)} new epochs.")
+
+        X_raw, y, _ = self._extract_features(epochs)
+        X_scaled = self.scaler_.transform(X_raw)
+
+        return X_scaled, y
 
 
 """
