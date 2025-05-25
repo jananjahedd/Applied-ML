@@ -8,7 +8,7 @@ import glob
 import os
 import pathlib
 from collections import defaultdict
-from typing import Any, List, Optional, Tuple, Union, TypedDict
+from typing import Any, List, Optional, Tuple, TypedDict, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -195,51 +195,99 @@ def load_split_data(npz_file_path: str) -> ProcessedData:
 
 def select_features(
     X: Optional[NDArray[np.float64]],
-    features_in_file: Optional[Union[List[str], NDArray[Any]]],
-    desired_features: List[str],
+    feature_names_as_in_npz: Optional[Union[List[str], NDArray[Any]]],
+    desired_feature_list: List[str],
 ) -> NDArray[np.float64]:
-    """Selects specified features (columns) from the input data array X.
-
-    :param X: The input data array (n_samples, n_features_in_file).
-    :param features_in_file: A list or NumPy array of feature names
-                             corresponding to the columns of X, or None.
-    :param desired_features: A list of feature names to select.
-
-    :return: a NumPy array containing only the desired features,
-             or an empty array if selection is not possible or
-             results in no features.
+    """
+    Selects specified features (columns) from the input data array X.
+    Tries to be robust against inconsistencies where len(feature_names_as_in_npz) > X.shape[1].
     """
     if X is None or X.size == 0:
+        logger.debug("select_features: X is None or empty.")
         return np.array([])
-    if features_in_file is None:
-        logger.info(
-            "'features_in_file' is None. Cannot select. " + f"Shape of X: {X.shape}"
+    if not desired_feature_list:
+        logger.debug("select_features: desired_feature_list is empty.")
+        return np.array([])
+
+    if feature_names_as_in_npz is None:
+        logger.warning(
+            "select_features: 'feature_names_as_in_npz' is None. "
+            "Attempting selection by assuming X columns match desired_feature_list if shapes are identical."
         )
-        if X.shape[1] == len(desired_features):
+        if X.shape[1] == len(desired_feature_list):
             logger.info(
-                "Assuming X columns match desired features "
-                + "due to name list missing."
+                "   Shapes match. Assuming direct correspondence of X columns to desired_feature_list."
             )
             return X
-        return np.array([])
-
-    try:
-        if not isinstance(features_in_file, list):
-            features_in_file = list(features_in_file)
-
-        indices_to_select = []
-        for desired_feat_name in desired_features:
-            try:
-                indices_to_select.append(features_in_file.index(desired_feat_name))
-            except ValueError:
-                pass
-
-        if not indices_to_select:
+        else:
+            logger.error(
+                f"   Shapes mismatch (X.shape[1]={X.shape[1]}, len(desired)={len(desired_feature_list)}). "
+                "Cannot select features."
+            )
             return np.array([])
-        return X[:, indices_to_select]
-    except Exception as e:
-        logger.error("An unexpected error occurred during " + f"feature selection: {e}")
+
+    # Ensure feature_names_as_in_npz is a list
+    _feature_names_as_in_npz_list: List[str]
+    if isinstance(feature_names_as_in_npz, np.ndarray):
+        if feature_names_as_in_npz.ndim == 0 and isinstance(
+            feature_names_as_in_npz.item(), list
+        ):
+            _feature_names_as_in_npz_list = feature_names_as_in_npz.item()  # type: ignore
+        else:
+            _feature_names_as_in_npz_list = list(feature_names_as_in_npz)
+    elif isinstance(feature_names_as_in_npz, list):
+        _feature_names_as_in_npz_list = feature_names_as_in_npz
+    else:
+        logger.error(
+            f"select_features: feature_names_as_in_npz is of unexpected type {type(feature_names_as_in_npz)}"
+        )
         return np.array([])
+
+    effective_column_names_for_X: List[str]
+    if len(_feature_names_as_in_npz_list) > X.shape[1]:
+        logger.warning(
+            f"select_features: len(feature_names_as_in_npz) ({len(_feature_names_as_in_npz_list)}) "
+            f"> X.shape[1] ({X.shape[1]}). This indicates an inconsistency in the source .npz file. "
+            f"Using the first {X.shape[1]} names from feature_names_as_in_npz as the "
+            "assumed names for X's columns."
+        )
+        effective_column_names_for_X = _feature_names_as_in_npz_list[: X.shape[1]]
+    elif len(_feature_names_as_in_npz_list) < X.shape[1]:
+        logger.error(
+            f"select_features: len(feature_names_as_in_npz) ({len(_feature_names_as_in_npz_list)}) "
+            f"< X.shape[1] ({X.shape[1]}). This is a critical inconsistency in the .npz file. "
+            "Cannot reliably map features."
+        )
+        return np.array([])
+    else:  # Lengths match, this is the ideal case.
+        effective_column_names_for_X = _feature_names_as_in_npz_list
+
+    indices_to_select_from_X = []
+    for feature_to_find in desired_feature_list:
+        try:
+            idx_in_X = effective_column_names_for_X.index(feature_to_find)
+            indices_to_select_from_X.append(idx_in_X)
+        except ValueError:
+            logger.debug(
+                f"Desired feature '{feature_to_find}' not found in "
+                f"effective_column_names_for_X: {effective_column_names_for_X}"
+            )
+            pass
+
+    if not indices_to_select_from_X:
+        logger.warning(
+            "select_features: None of the desired features were found in the "
+            f"effective columns of X. Desired: {desired_feature_list}. "
+            f"Effective names for X's columns: {effective_column_names_for_X}."
+        )
+        return np.array([])
+
+    logger.debug(
+        f"select_features: Selecting indices {indices_to_select_from_X} from X with shape {X.shape}"
+    )
+    selected_X = X[:, indices_to_select_from_X]
+    logger.debug(f"select_features: Selected X shape: {selected_X.shape}")
+    return selected_X
 
 
 def main_lr() -> None:
