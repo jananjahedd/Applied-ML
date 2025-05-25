@@ -8,7 +8,7 @@ import glob
 import os
 import pathlib
 from collections import defaultdict
-from typing import DefaultDict, List, Optional, Set, Tuple, TypedDict, Union
+from typing import Any, DefaultDict, List, Optional, Set, Tuple, TypedDict, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -211,13 +211,13 @@ def load_split_data(npz_file_path: str) -> ProcessedData:
         )
     except FileNotFoundError:
         logger.error(f"Error: File not found at {npz_file_path}")
-        return None, None, None, None, None, None, None, None, True
+        return None, None, None, None, None, None, None, None, True  # type: ignore
     except KeyError as e:
         logger.error(f"Error: Missing expected key {e} in {npz_file_path}")
-        return None, None, None, None, None, None, None, None, True
+        return None, None, None, None, None, None, None, None, True  # type: ignore
     except Exception as e:
         logger.error(f"Error loading {npz_file_path}: {e}", exc_info=True)
-        return None, None, None, None, None, None, None, None, True
+        return None, None, None, None, None, None, None, None, True  # type: ignore
 
 
 def _get_split_files(splits_dir: pathlib.Path) -> List[str]:
@@ -364,21 +364,20 @@ def _build_svm_pipeline(
 
 def _train_svm_model_with_gridsearch(
     pipeline: Union[SklearnPipeline, ImbPipeline],
-    param_grid: dict,
+    param_grid: dict[Any, Any],
     X_hp_train: NDArray[np.float64],
     y_hp_train: NDArray[np.int_],
-    logger_obj,  # Pass logger explicitly
 ) -> Optional[SVC]:  # Return type is the estimator from the pipeline
     best_svm_estimator = None
     if X_hp_train.shape[0] < 5 or len(np.unique(y_hp_train)) < 2:
-        logger_obj.warning("Combined train+val for SVM too small. Fitting directly.")
+        logger.warning("Combined train+val for SVM too small. Fitting directly.")
         try:
             pipeline.fit(X_hp_train, y_hp_train)
             best_svm_estimator = (
                 pipeline  # The whole pipeline is the "best estimator" here
             )
         except Exception as e:
-            logger_obj.error(f"Error fitting SVM directly: {e}", exc_info=True)
+            logger.error(f"Error fitting SVM directly: {e}", exc_info=True)
         return best_svm_estimator
 
     min_samples_class = 0
@@ -387,23 +386,25 @@ def _train_svm_model_with_gridsearch(
             counts = np.bincount(y_hp_train)
             if counts.size > 0:  # Check if counts is not empty
                 min_samples_class = (
-                    np.min(counts[np.nonzero(counts)]) if np.any(counts) else 0
+                    np.min(counts[np.nonzero(counts)])
+                    if np.any(counts)
+                    else 0  # type: ignore
                 )
             else:  # Handle case where y_hp_train was non-empty but bincount result
                 # is empty (e.g. all labels are 0, then np.nonzero is empty)
                 min_samples_class = (
-                    0
+                    0  # type: ignore
                     if len(np.unique(y_hp_train)) <= 1
                     else np.min(np.unique(y_hp_train, return_counts=True)[1])
                 )
 
         else:  # Handle negative labels if they can occur
-            logger_obj.warning(
+            logger.warning(
                 "y_hp_train_svm contains negative labels, cannot use np.bincount "
                 "directly for min_samples_class."
             )
             unique_labels, counts = np.unique(y_hp_train, return_counts=True)
-            min_samples_class = np.min(counts) if len(counts) > 0 else 0
+            min_samples_class = np.min(counts) if len(counts) > 0 else 0  # type: ignore
 
     # Adjust SMOTE k_neighbors if SMOTE is in the pipeline
     if (
@@ -411,7 +412,7 @@ def _train_svm_model_with_gridsearch(
     ):  # Check against global SMOTE
         k_val = min(5, min_samples_class - 1) if min_samples_class > 1 else 1
         if k_val < 1:  # SMOTE k_neighbors must be >= 1
-            logger_obj.info(
+            logger.info(
                 f"Calculated k_val for SMOTE is {k_val}. "
                 "Removing SMOTE as k_neighbors too small/invalid."
             )
@@ -424,14 +425,14 @@ def _train_svm_model_with_gridsearch(
             except (
                 ValueError
             ) as e:  # Catch specific error if smote is not in pipeline anymore
-                logger_obj.warning(
+                logger.warning(
                     "Could not set smote__k_neighbors, "
                     f"SMOTE might have been removed: {e}"
                 )
 
     n_splits_cv = min(5, min_samples_class) if min_samples_class > 0 else 1
     if n_splits_cv < 2:
-        logger_obj.warning(
+        logger.warning(
             f"Warning: Cannot perform {n_splits_cv}-fold CV for SVM "
             f"(min_samples_class: {min_samples_class}). Fitting directly."
         )
@@ -439,7 +440,7 @@ def _train_svm_model_with_gridsearch(
             pipeline.fit(X_hp_train, y_hp_train)
             best_svm_estimator = pipeline
         except Exception as e:
-            logger_obj.error(
+            logger.error(
                 f"Error fitting SVM directly after CV check: {e}", exc_info=True
             )
         return best_svm_estimator
@@ -455,17 +456,15 @@ def _train_svm_model_with_gridsearch(
     try:
         gs.fit(X_hp_train, y_hp_train)
         best_svm_estimator = gs.best_estimator_
-        logger_obj.info(f"Best SVM Params: {gs.best_params_}")
+        logger.info(f"Best SVM Params: {gs.best_params_}")
     except Exception as e:
-        logger_obj.error(f"Error in GridSearchCV for SVM: {e}", exc_info=True)
-        logger_obj.info(
-            "GridSearchCV failed for SVM. Attempting to fit pipeline directly."
-        )
+        logger.error(f"Error in GridSearchCV for SVM: {e}", exc_info=True)
+        logger.info("GridSearchCV failed for SVM. Attempting to fit pipeline directly.")
         try:
             pipeline.fit(X_hp_train, y_hp_train)
             best_svm_estimator = pipeline
         except Exception as e_fit:
-            logger_obj.error(
+            logger.error(
                 f"Error fitting SVM directly after GS failure: {e_fit}", exc_info=True
             )
 
@@ -479,7 +478,6 @@ def _evaluate_svm_on_test_set(
     master_label_set: Set[int],
     fusion_config: str,  # For logging
     split_file_basename: str,  # For logging
-    logger_obj,  # Pass logger explicitly
 ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
     acc, f1, roc_auc_val = np.nan, np.nan, np.nan
     try:
@@ -504,7 +502,7 @@ def _evaluate_svm_on_test_set(
             elif y_proba.shape[1] != len(sorted_labels) and y_proba.shape[1] != len(
                 unique_y_test_labels
             ):
-                logger_obj.warning(
+                logger.warning(
                     f"predict_proba columns ({y_proba.shape[1]}) match neither "
                     f"master_label_set ({len(sorted_labels)}) nor unique_y_test_labels "
                     f"({len(unique_y_test_labels)}). ROC AUC may be problematic."
@@ -523,14 +521,14 @@ def _evaluate_svm_on_test_set(
                 labels=roc_auc_labels_to_use,
             )
         else:
-            logger_obj.warning(
+            logger.warning(
                 f"Cannot compute ROC AUC for SVM (config {fusion_config}, file "
                 f"{split_file_basename}): not enough classes in y_test "
                 f"({len(unique_y_test_labels)}) or y_proba shape ({y_proba.shape}) "
                 "mismatch with available labels."
             )
 
-        logger_obj.info(
+        logger.info(
             f"SVM Test Performance (Config: {fusion_config}, "
             f"File: {split_file_basename}):"
         )
@@ -541,46 +539,44 @@ def _evaluate_svm_on_test_set(
             labels=sorted_labels,
             target_names=[f"Class {lab}" for lab in sorted_labels],
         )
-        logger_obj.info(f"\n{report}")
+        logger.info(f"\n{report}")
         cm = confusion_matrix(y_test, y_pred, labels=sorted_labels)
-        logger_obj.info(f"Confusion Matrix:\n{cm}")
+        logger.info(f"Confusion Matrix:\n{cm}")
 
     except Exception as e:
-        logger_obj.error(
+        logger.error(
             f"Error during SVM evaluation for {split_file_basename}: {e}", exc_info=True
         )
         # Metrics will remain NaN if an error occurs
     return acc, f1, roc_auc_val
 
 
-def _log_overall_results(
-    results_by_config: DefaultDict[str, ResultMetrics], logger_obj
-) -> None:
-    logger_obj.info("\n\n--- Overall Results for SVM Model ---")
+def _log_overall_results(results_by_config: DefaultDict[str, ResultMetrics]) -> None:
+    logger.info("\n\n--- Overall Results for SVM Model ---")
     for config_name, results in results_by_config.items():
         if (
             results["count"] > 0
             and results["accuracy"]
             and any(not np.isnan(x) for x in results["accuracy"])
         ):  # Check if any valid accuracy score exists
-            logger_obj.info(
+            logger.info(
                 f"\nConfiguration: {config_name} (Processed {results['count']} files)"
             )
-            logger_obj.info(
+            logger.info(
                 f"  Mean Accuracy: {np.nanmean(results['accuracy']):.4f} +/- "
                 f"{np.nanstd(results['accuracy']):.4f}"
             )
-            logger_obj.info(
+            logger.info(
                 f"  Mean Macro F1-score: {np.nanmean(results['f1_macro']):.4f} +/- "
                 f"{np.nanstd(results['f1_macro']):.4f}"
             )
-            logger_obj.info(
+            logger.info(
                 "  Mean ROC AUC (OVR Macro): "
                 f"{np.nanmean(results['roc_auc_ovr']):.4f} +/- "
                 f"{np.nanstd(results['roc_auc_ovr']):.4f}"
             )
         else:
-            logger_obj.error(
+            logger.error(
                 "\nNo valid results or all results are NaN for "
                 f"SVM configuration: {config_name}"
             )
@@ -679,7 +675,7 @@ def main_svm() -> None:
 
         # Prepare data for hyperparameter tuning
         X_hp_train_svm: NDArray[np.float64] = X_train_p
-        y_hp_train_svm: NDArray[np.int_] = y_train_p
+        y_hp_train_svm: NDArray[np.int_] = y_train_p  # type: ignore
         if (
             X_val_p is not None
             and X_val_p.size > 0
@@ -687,7 +683,7 @@ def main_svm() -> None:
             and y_val_p.size > 0
         ):
             X_hp_train_svm = np.vstack((X_train_p, X_val_p))
-            y_hp_train_svm = np.concatenate((y_train_p, y_val_p))
+            y_hp_train_svm = np.concatenate((y_train_p, y_val_p))  # type: ignore
         X_hp_train_svm, y_hp_train_svm = shuffle(
             X_hp_train_svm, y_hp_train_svm, random_state=42
         )
@@ -699,7 +695,7 @@ def main_svm() -> None:
         }
 
         best_svm = _train_svm_model_with_gridsearch(
-            svm_pipeline, svm_param_grid, X_hp_train_svm, y_hp_train_svm, logger
+            svm_pipeline, svm_param_grid, X_hp_train_svm, y_hp_train_svm
         )
 
         if (
@@ -715,7 +711,6 @@ def main_svm() -> None:
                 master_label_set,
                 fusion_config,
                 os.path.basename(split_file),
-                logger,
             )
             current_config_results["accuracy"].append(
                 acc if acc is not None else np.nan
@@ -734,4 +729,4 @@ def main_svm() -> None:
             current_config_results["f1_macro"].append(np.nan)
             current_config_results["roc_auc_ovr"].append(np.nan)
 
-    _log_overall_results(results_by_config, logger)
+    _log_overall_results(results_by_config)
