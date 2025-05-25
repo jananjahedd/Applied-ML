@@ -1,5 +1,13 @@
+"""Module for executing the LOSO CV method on the data.
+
+It takes the preprocessed data, performs data
+augmentation on the training splits, and extracts
+features for all splits using a fit/transform pipeline.
+"""
+
 import pathlib
 from typing import Dict, List, Tuple
+from logging import Logger
 
 import mne
 import numpy as np
@@ -11,16 +19,21 @@ from src.data.data_augmentation import (
     gaussian_noise,
     sign_flip,
     time_reverse,
-    )
+)
 
 from src.features.feature_engineering import FeatureEngineering
-from logging import Logger
-logger: Logger
+
+FUSION_CONFIG: Dict[str, List[str]] = {
+    "eeg_only": ["eeg"],
+    "eeg_eog": ["eeg", "eog"],
+    "eeg_emg": ["eeg", "emg"],
+    "eeg_eog_emg": ["eeg", "eog", "emg"],
+}
 
 
 def load_preprocessed_data(
         processed_data_dir: pathlib.Path,
-        logger
+        logger: Logger
         ) -> Tuple[List[mne.Epochs], List[str]]:
     """Load preprocessed data, perhaps a function that also includes the
     data paths to the processed files.
@@ -75,12 +88,11 @@ def load_preprocessed_data(
 def prepare_data_for_loso(
         subjects_epochs_list: List[mne.Epochs],
         subject_ids: List[str],
-        logger
+        logger: Logger
         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Prepare the data before performing loso, so perhaps another
     function for modularity (optionally it can also go in the load_data).
     """
-
     X_list = [e.get_data() for e in subjects_epochs_list]
     y_list = [e.events[:, -1].astype(np.int_) for e in subjects_epochs_list]
     groups_list = [
@@ -93,7 +105,7 @@ def prepare_data_for_loso(
 
     logger.info(
         f"Combined shapes: X={X.shape}, y={y.shape}, groups={groups.shape}"
-        )
+    )
     logger.info(f"Unique group identifiers: {np.unique(groups)}")
     logger.info(f"Number of subjects (groups): {len(subject_ids)}")
 
@@ -108,7 +120,7 @@ def execute_loso_cv(
         subjects_epochs_list: List[mne.Epochs],
         fusion_config: Dict[str, List[str]],
         splits_dir: pathlib.Path,
-        logger
+        logger: Logger
         ) -> None:
     """The big loop for loso, before are initializations and checks."""
 
@@ -184,9 +196,8 @@ def execute_loso_cv(
                     X_train_aug_list.append(sign_flip(original_epoch.copy()))
                     y_train_aug_list.append(original_label)
 
-                    X_train_aug_list.append(
-                        time_reverse(original_epoch.copy())
-                    )
+                    X_train_aug_list.append(time_reverse(original_epoch.copy())
+                                            )
                     y_train_aug_list.append(original_label)
 
                 X_train_aug = np.array(X_train_aug_list)
@@ -198,7 +209,7 @@ def execute_loso_cv(
                 )
             else:
                 logger.info(
-                    f"Training set (X_train_cv) for {config} was empty. "
+                    f"Internal training set (X_train_cv) for {config} empty. "
                     + "No augmentation performed."
                 )
                 X_train_aug = np.array([])
@@ -207,55 +218,43 @@ def execute_loso_cv(
             feature_pipeline = FeatureEngineering()
 
             mne_epochs_train = create_epochs_from_numpy(
-                X_train_aug, y_train_aug, template_info
-            )
+                X_train_aug, y_train_aug, template_info)
             logger.info(f"Extracting & fitting TRAIN features for '{config}'")
             X_ft_train, y_ft_train, feature_names = feature_pipeline.fit(
-                mne_epochs_train
-            )
+                mne_epochs_train)
             logger.info(f"Extracted TRAIN features shape: {X_ft_train.shape}")
 
             mne_epochs_val = create_epochs_from_numpy(
-                X_val_subset, y_val_cv, template_info
-            )
+                X_val_subset, y_val_cv, template_info)
             logger.info(f"Extracting VALIDATION features for '{config}'...")
             try:
                 X_ft_val, y_ft_val = feature_pipeline.transform(mne_epochs_val)
                 logger.info(
-                    f"Extracted VALIDATION features shape: {X_ft_val.shape}"
-                )
+                    f"Extracted VALIDATION features shape: {X_ft_val.shape}")
             except NotFittedError as e:
-                logger.error(
-                    f"Validation transform failed: {e}."
-                    + " The pipeline wasn't fitted."
-                )
+                logger.error(f"Validation transform failed: {e}."
+                             + " The pipeline wasn't fitted.")
                 continue
 
             mne_epochs_test = create_epochs_from_numpy(
-                X_test_subset, y_test, template_info
-            )
+                X_test_subset, y_test, template_info)
             logger.info(f"Extracting TEST features for '{config}'...")
             try:
                 X_ft_test, y_ft_test = feature_pipeline.transform(
-                    mne_epochs_test
-                )
-                logger.info(f"Extracted TEST feature shape: {X_ft_test.shape}")
+                    mne_epochs_test)
+                logger.info(f"Extracted TEST  shape: {X_ft_test.shape}")
             except NotFittedError as e:
-                logger.error(
-                    f"Test transform failed: {e}."
-                    + " The pipeline wasn't fitted."
-                )
+                logger.error(f"Test transform failed: {e}."
+                             + " The pipeline wasn't fitted.")
                 continue
 
             split_filename = (
-                f"split_{str(i).zfill(2)}_test_subj_{test_subj_id}_{config}"
-                ".npz"
+                f"split_{str(i).zfill(2)}_test_subj_{test_subj_id}_{config}."
+                "npz"
             )
             save_path = splits_dir / split_filename
 
-            logger.info(
-                f"Saving processed split for '{config}' to {save_path}"
-            )
+            logger.info(f"Saving split for '{config}' to {save_path}")
             np.savez_compressed(
                 save_path,
                 X_train=X_ft_train,
