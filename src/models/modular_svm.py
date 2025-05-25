@@ -1,3 +1,9 @@
+"""Module for the Support-Vector Machine model.
+
+It implements the SVM architecture, trains and evaluates
+the model.
+"""
+
 import glob
 import os
 import pathlib
