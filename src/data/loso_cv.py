@@ -283,32 +283,28 @@ def splitting(
                 f"Saving {split_name} featured data for '{modality}'"
                 + f" to {save_path}"
             )
-            np.savez_compressed(
-                save_path,
-                X=X_featured,
-                y=y_featured,
-                subject_group_ids=groups_split,
-                feature_names=np.array(feature_names, dtype=object)
-            )
+
+            # create a data dictionary with the variables to save
+            data_dict = {
+                f'X_{split_name}': X_featured,
+                f'y_{split_name}': y_featured,
+                'subject_group_ids': groups_split,
+                'feature_names': np.array(feature_names, dtype=object)
+            }
+            np.savez_compressed(save_path, **data_dict)
             logger.info(
                 f"Successfully saved featured data for '{modality.upper()}'.")
 
     logger.info("\n--- All data splits processed, engineered, and saved ---")
 
 
-def loso_cv_main():
-    # --- Execution ---
-    # Create the output directory if it doesn't exist
+def main():
     logger.info(f"Creating output directory: {SPLITS_DIR}")
     SPLITS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Load the preprocessed MNE Epochs files
     subjects_epochs_list, _ = load_preprocessed_data()
-
-    # 2. Concatenate data from all subjects into single numpy arrays
     X, y, groups = prepare_data(subjects_epochs_list)
 
-    # 3. Execute the split, augmentation, and feature engineering
     splitting(
         X=X,
         y=y,
@@ -316,9 +312,8 @@ def loso_cv_main():
         subjects_epochs_list=subjects_epochs_list,
         splits_dir=SPLITS_DIR,
     )
-
     logger.info("✅ Pipeline finished successfully!")
 
 
 if __name__ == "__main__":
-    loso_cv_main()
+    main()
