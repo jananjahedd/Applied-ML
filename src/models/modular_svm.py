@@ -5,6 +5,7 @@ the model, and generates relevant plots.
 """
 
 import pathlib
+import joblib
 from collections import defaultdict
 from typing import (Any, DefaultDict,
                     Dict, List, Optional,
@@ -741,6 +742,21 @@ def main_svm() -> None:
                     display_labels=display_labels,
                     title=f"Confusion Matrix - {fusion_config_key}",
                     save_path=save_path
+                )
+
+            # SAVE THE MODEL
+            model_path = RESULTS_DIR / f"svm_model_{fusion_config_key}.joblib"
+
+            try:
+                joblib.dump(best_svm_estimator, model_path)
+                logger.info(
+                    "Successfully saved best model for config "
+                    f"'{fusion_config_key}' to: {model_path}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to save model for config '{fusion_config_key}'."
+                    f" Error: {e}", exc_info=True
                 )
 
             final_svc_model = None
