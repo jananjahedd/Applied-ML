@@ -279,7 +279,8 @@ def plot_epochs_mne(
     )
 
 
-if __name__ == "__main__":
+def preprocess_pipeline():
+    """Main function to preprocess the raw data."""
     mne.set_log_level("INFO")
     start_time_total = time.time()
     info_log(f"Project Root: {PROJECT_ROOT}")

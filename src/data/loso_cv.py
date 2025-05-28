@@ -85,7 +85,7 @@ def load_preprocessed_data(
     return subjects_epochs_list, subject_ids
 
 
-def prepare_data_for_splitting(
+def prepare_data(
     subjects_epochs_list: List[mne.Epochs],
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Prepare the data before performing the split."""
@@ -107,7 +107,7 @@ def prepare_data_for_splitting(
     return X, y, groups
 
 
-def execute_subject_stratified_split(
+def splitting(
     X: np.ndarray,
     y: np.ndarray,
     groups: np.ndarray,
