@@ -57,21 +57,8 @@ PROJECT_ROOT = pathlib.Path(get_repo_root())
 SPLITS_DIR = pathlib.Path(get_splits_data())
 RESULTS_DIR = pathlib.Path(get_results_dir())
 
-
-# The primary source of feature names should be the loaded .npz files.
-ALL_FEATURE_NAMES_REFERENCE = [
-    "Fpz-Cz_delta_RelP", "Pz-Oz_delta_RelP",
-    "Fpz-Cz_theta_RelP", "Pz-Oz_theta_RelP",
-    "Fpz-Cz_alpha_RelP", "Pz-Oz_alpha_RelP",
-    "Fpz-Cz_sigma_RelP", "Pz-Oz_sigma_RelP",
-    "Fpz-Cz_beta_RelP", "Pz-Oz_beta_RelP",
-    "horizontal_Var", "submental_Mean",
-]
-
-SPLITS_DIR = PROJECT_ROOT / "data_splits"
-
 # Define configurations to run SVM on
-CONFIGS_TO_RUN = ["eeg", "emg", "eog", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
+CONFIGS_TO_RUN = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
 
 
 class ResultMetrics(TypedDict):
