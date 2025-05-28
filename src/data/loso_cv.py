@@ -23,6 +23,14 @@ from src.data.data_augmentation import (
 from src.features.feature_engineering import FeatureEngineering
 from src.utils.logger import get_logger
 
+from src.utils.paths import (get_processed_data_dir,
+                             get_repo_root, get_splits_data)
+
+
+PROJECT_ROOT = pathlib.Path(get_repo_root())
+DATA_SUBFOLDER = "sleep-cassette"
+PROCESSED_DATA_DIR = pathlib.Path(get_processed_data_dir()) / DATA_SUBFOLDER
+SPLITS_DIR = pathlib.Path(get_splits_data())
 
 FUSION_CONFIG: Dict[str, List[str]] = {
     "eeg": ["eeg"],
@@ -34,18 +42,14 @@ FUSION_CONFIG: Dict[str, List[str]] = {
 logger = get_logger("splitting")
 
 
-def load_preprocessed_data(
-    processed_data_dir: pathlib.Path
-) -> Tuple[List[mne.Epochs], List[str]]:
-    """Load preprocessed data, perhaps a function that also includes the
-    data paths to the processed files.
-    """
-    logger.info(f"Loading preprocessed data from: {processed_data_dir}")
-    processed_files = sorted(list(processed_data_dir.glob("SC*-epo.fif")))
+def load_preprocessed_data() -> Tuple[List[mne.Epochs], List[str]]:
+    """Load preprocessed data from the designated folder"""
+    logger.info(f"Loading preprocessed data from: {PROCESSED_DATA_DIR}")
+    processed_files = sorted(list(PROCESSED_DATA_DIR.glob("SC*-epo.fif")))
 
     if not processed_files:
         logger.error(
-            f"No epoch files (*-epo.fif) found in {processed_data_dir}. "
+            f"No epoch files (*-epo.fif) found in {PROCESSED_DATA_DIR}. "
             "Please run the preprocessing script first."
         )
         exit()
@@ -247,8 +251,9 @@ def splitting(
         epochs_train_aug = create_epochs_from_numpy(
             X_train_aug, y_train_aug, modality_info
         )
-        X_train_featured, y_train_featured, _ = feature_engineer.fit(
-            epochs_train_aug)
+        X_train_featured, y_train_featured, feature_names = (
+            feature_engineer.fit(epochs_train_aug)
+        )
 
         # transform validation data
         logger.info(f"Transforming validation data for {modality.upper()}.")
@@ -273,7 +278,7 @@ def splitting(
         for split_name, (X_featured, y_featured,
                          groups_split) in data_to_save.items():
             save_filename = f"{split_name}_{modality}_featured.npz"
-            save_path = splits_dir / save_filename
+            save_path = SPLITS_DIR / save_filename
             logger.info(
                 f"Saving {split_name} featured data for '{modality}'"
                 + f" to {save_path}"
@@ -283,6 +288,7 @@ def splitting(
                 X=X_featured,
                 y=y_featured,
                 subject_group_ids=groups_split,
+                feature_names=np.array(feature_names, dtype=object)
             )
             logger.info(
                 f"Successfully saved featured data for '{modality.upper()}'.")
@@ -290,31 +296,25 @@ def splitting(
     logger.info("\n--- All data splits processed, engineered, and saved ---")
 
 
-"""
 def main():
-    root = pathlib.Path(__file__).resolve().parent.parent.parent
-    processed_data_dir = root / "processed_data" / "sleep-cassette"
-    # Output files will be saved in 'data/splits'.
-    splits_dir = root / "data_splits"
-
     # --- Execution ---
     # Create the output directory if it doesn't exist
-    logger.info(f"Creating output directory: {splits_dir}")
-    splits_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Creating output directory: {SPLITS_DIR}")
+    SPLITS_DIR.mkdir(parents=True, exist_ok=True)
 
     # 1. Load the preprocessed MNE Epochs files
-    subjects_epochs_list, _ = load_preprocessed_data(processed_data_dir)
+    subjects_epochs_list, _ = load_preprocessed_data()
 
     # 2. Concatenate data from all subjects into single numpy arrays
-    X, y, groups = prepare_data_for_splitting(subjects_epochs_list)
+    X, y, groups = prepare_data(subjects_epochs_list)
 
     # 3. Execute the split, augmentation, and feature engineering
-    execute_subject_stratified_split(
+    splitting(
         X=X,
         y=y,
         groups=groups,
         subjects_epochs_list=subjects_epochs_list,
-        splits_dir=splits_dir,
+        splits_dir=SPLITS_DIR,
     )
 
     logger.info("✅ Pipeline finished successfully!")
@@ -322,4 +322,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
+
