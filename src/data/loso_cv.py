@@ -296,7 +296,7 @@ def splitting(
     logger.info("\n--- All data splits processed, engineered, and saved ---")
 
 
-def main():
+def loso_cv_main():
     # --- Execution ---
     # Create the output directory if it doesn't exist
     logger.info(f"Creating output directory: {SPLITS_DIR}")
@@ -321,5 +321,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
+    loso_cv_main()

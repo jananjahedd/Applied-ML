@@ -802,8 +802,8 @@ if __name__ == "__main__":
             "Please create it or check path."
         )
         logger.error(
-            "Ensure that `split.py` has run and saved its output "
-            "(e.g., train_eeg_featured.npz) into this directory."
+            "Ensure that `loso_cv.py` has run and saved its output "
+            "into this directory."
         )
     else:
         main_svm()
