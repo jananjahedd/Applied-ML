@@ -15,3 +15,5 @@ dependencies:
   - requests
   - wget
   - pre-commit
+  - fastapi
+  - uvicorn
