@@ -1,6 +1,9 @@
 import unittest
 
-from main import hello_world
+
+def hello_world() -> str:
+    """Returns a greeting message."""
+    return "Hello, World!"
 
 
 class MainTest(unittest.TestCase):
