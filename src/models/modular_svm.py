@@ -6,13 +6,14 @@ the model, and generates relevant plots.
 
 import pathlib
 import joblib
+import json
 from collections import defaultdict
 from typing import (Any, DefaultDict,
                     Dict, List, Optional,
                     Set, Tuple, TypedDict, Union)
 
 import numpy as np
-import matplotlib.pyplot as plt  # For plotting
+import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
@@ -34,6 +35,12 @@ from src.utils.paths import (get_splits_data,
                              get_repo_root,
                              get_results_dir)
 from src.utils.logger import get_logger
+
+try:
+    import pandas as pd
+    pandas_available = True
+except ImportError:
+    pandas_available = False
 
 try:
     from imblearn.over_sampling import SMOTE  # type: ignore
@@ -64,9 +71,23 @@ CONFIGS_TO_RUN = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
 
 class ResultMetrics(TypedDict):
     """TypedDict for storing SVM result metrics."""
-    accuracy: List[float]
-    f1_macro: List[float]
-    roc_auc_ovr: List[float]
+    test_accuracy: List[float]
+    test_f1_macro: List[float]
+    test_roc_auc_ovr: List[float]
+    test_classification_report: List[str]
+
+    # Training set metrics
+    train_accuracy: List[float]
+    train_f1_macro: List[float]
+    train_roc_auc_ovr: List[float]
+    train_classification_report: List[str]
+
+    # Validation set metrics
+    val_accuracy: List[float]
+    val_f1_macro: List[float]
+    val_roc_auc_ovr: List[float]
+    val_classification_report: List[str]
+
     count: int
 
 
@@ -123,7 +144,7 @@ def load_data(
             else:
                 num_feats = train_data['X_train'].shape[1]
                 combined_features.extend(
-                    [f"{modality}_feat{j}" for j in range(num_feats)]
+                    [f"{modality}_feat{j+1}" for j in range(num_feats)]
                 )
 
             # load once and verify
@@ -160,14 +181,42 @@ def load_data(
             )
             return None, None, None, None, None, None, None, True
 
-    if not X_train_parts:
+    if not X_train_parts or first_y_train is None:
+        logger.error(
+            f"No data parts loaded or labels missing for config"
+            f" '{config_key}'."
+        )
         return None, None, None, None, None, None, None, True
 
-    final_X_train = np.hstack(X_train_parts)
-    final_X_val = np.hstack(X_val_parts)
-    final_X_test = np.hstack(X_test_parts)
+    final_X_train = np.hstack(X_train_parts) if X_train_parts else np.array([])
+    final_X_val = np.hstack(X_val_parts) if X_val_parts else np.array([])
+    final_X_test = np.hstack(X_test_parts) if X_test_parts else np.array([])
+
+    # ensure features are unique
+    if len(combined_features) != final_X_train.shape[1] and \
+            final_X_train.size > 0:
+        logger.warning(
+            "Feature name count mismatch. Generating generic feature names."
+        )
+        combined_features = [
+            f"feat_{j+1}" for j in range(final_X_train.shape[1])
+        ]
 
     logger.info(f"Data loaded successfully for config '{config_key}'")
+    logger.info(
+        f"Shapes: X_train: {final_X_train.shape}, y_train: "
+        f"{first_y_train.shape if first_y_train is not None else 'None'}"
+    )
+    if final_X_val.size > 0:
+        logger.info(
+            f"Shapes: X_val: {final_X_val.shape}, y_val: "
+            f"{first_y_val.shape if first_y_val is not None else 'None'}"
+        )
+    if final_X_test.size > 0:
+        logger.info(
+            f"Shapes: X_test: {final_X_test.shape}, y_test: "
+            f"{first_y_test.shape if first_y_test is not None else 'None'}"
+        )
 
     return (final_X_train, first_y_train, final_X_val, first_y_val,
             final_X_test, first_y_test, combined_features, False)
@@ -180,35 +229,15 @@ def _build_svm_pipeline(
     SMOTE_class_ref: Optional[type],
 ) -> Union[SklearnPipeline, ImbPipeline]:  # type: ignore
     n_features = X_train_svm.shape[1]
-    use_pca = n_features > 10
+    if n_features == 0:
+        logger.error("Cannot build SVM pipeline: X_train_svm has 0 features.")
+        raise ValueError("X_train_svm for pipeline building has 0 features.")
 
     svm_pipeline_steps: List[Tuple[str, Any]] = [("scaler", StandardScaler())]
-    if use_pca:
-        num_pca_fit_samples = X_train_svm.shape[0]
-        if X_val_svm is not None and X_val_svm.size > 0:
-            num_pca_fit_samples += X_val_svm.shape[0]
-
-        max_pca_comps = min(num_pca_fit_samples, n_features)
-        pca_n_components: Union[int, float, str] = 0.95
-
-        if max_pca_comps <= 1:
-            logger.info(
-                f"Max PCA components ({max_pca_comps}) or n_features" +
-                f"({n_features}) too small. Disabling PCA."
-            )
-            use_pca = False
-        elif isinstance(pca_n_components, float) and \
-                int(pca_n_components * max_pca_comps) < 1:
-            pca_n_components = max_pca_comps
-            logger.info(
-                f"Adjusted PCA n_components to {pca_n_components}"
-                "as 0.95 variance resulted in <1 component."
-            )
-
-        if use_pca:
-            svm_pipeline_steps.append(
-                ("pca", PCA(n_components=pca_n_components, random_state=42))
-            )
+    if n_features > 10:
+        svm_pipeline_steps.append(
+            ("pca", PCA(n_components=0.95, random_state=42))
+        )
 
     if imblearn_available_flag and SMOTE_class_ref is not None:
         svm_pipeline_steps.append(("smote", SMOTE_class_ref(random_state=42)))
@@ -243,10 +272,12 @@ def _train_svm_model_with_gridsearch(
     best_estimator: Optional[BaseEstimator] = None
     cv_results_data: Optional[Dict[str, Any]] = None
 
-    if X_hp_train.shape[0] < 5 or len(np.unique(y_hp_train)) < 2:
+    unique_y_classes, y_counts = np.unique(y_hp_train, return_counts=True)
+    if X_hp_train.shape[0] < 5 or len(unique_y_classes) < 2:
         logger.warning(
-            "Combined train+val for SVM too small for GridSearchCV."
-            " Fitting pipeline directly."
+            f"Combined train+val for SVM too small (shape {X_hp_train.shape},"
+            f" {len(unique_y_classes)} classes) for GridSearchCV. "
+            "Fitting pipeline directly."
         )
         try:
             pipeline.fit(X_hp_train, y_hp_train)
@@ -258,43 +289,63 @@ def _train_svm_model_with_gridsearch(
             )
         return best_estimator, None
 
-    min_samples_class = 0
-    if y_hp_train.size > 0:
-        unique_labels, counts = np.unique(y_hp_train, return_counts=True)
-        if counts.size > 0:
-            min_samples_class = np.min(counts)
+    min_samples_class = np.min(y_counts) if y_counts.size > 0 else 0
+    logger.info(
+        f"Min samples per class in HP tuning data: {min_samples_class}"
+    )
 
     current_pipeline_dict = dict(pipeline.steps)
     if "smote" in current_pipeline_dict and SMOTE is not None:
         k_val = min(5, min_samples_class - 1) if min_samples_class > 1 else 1
-        if k_val < 1:
-            logger.info(
-                f"Calculated k_val for SMOTE is {k_val} (<1). "
-                "Removing SMOTE from pipeline."
+        if k_val == 0 and min_samples_class == 1:
+            logger.warning(
+                f"Min samples per class is 1. SMOTE cannot be applied with "
+                "k_neighbors=0. Removing SMOTE."
             )
-            steps_no_smote = [s for s in pipeline.steps if s[0] != "smote"]
-            pipeline = SklearnPipeline(steps_no_smote)
-        else:
+            original_steps = pipeline.steps
+            steps_no_smote = [(name, step) for name, step in original_steps
+                              if name != "smote"]
+            # determine if ImbPipeline is still needed
+            is_still_imblearn = any(
+                isinstance(step, (SMOTE.__class__ if SMOTE else object))
+                for name, step in steps_no_smote if name != 'smote'
+            )
+            NewPipelineType = (ImbPipeline if is_still_imblearn and
+                               imblearn_available else SklearnPipeline)
+            pipeline = NewPipelineType(steps_no_smote)
+        elif k_val >= 1:
             try:
-                pipeline.set_params(smote__k_neighbors=k_val)
+                if 'smote__k_neighbors' in pipeline.get_params().keys():
+                    pipeline.set_params(smote__k_neighbors=k_val)
+                    logger.info(f"SMOTE k_neighbors set to: {k_val}")
+                else:
+                    logger.warning(
+                        "Could not find 'smote__k_neighbors' in pipeline "
+                        "params. SMOTE k_val not set."
+                    )
             except ValueError as e:
                 logger.warning(
                     f"Could not set smote__k_neighbors (k_val={k_val}), "
-                    f"SMOTE might have issues or been removed: {e}"
-                )
+                    f"SMOTE might have issues: {e}")
+        else:
+            logger.warning(
+                f"Calculated k_val for SMOTE is {k_val}. "
+                "SMOTE might be ineffective or error."
+            )
 
-    n_splits_cv = min(5, min_samples_class) if min_samples_class > 0 else 1
+    n_splits_cv = min(5, min_samples_class) if min_samples_class >= 2 else 2
     if n_splits_cv < 2:
         logger.warning(
-            f"Cannot perform {n_splits_cv}-fold CV (min_samples_class:"
-            f" {min_samples_class}). Fitting pipeline directly."
+            f"Min samples per class ({min_samples_class}) is less than 2. "
+            "GridSearchCV might be unstable or fail. Attempting direct fit."
         )
         try:
             pipeline.fit(X_hp_train, y_hp_train)
             best_estimator = pipeline
         except Exception as e:
             logger.error(
-                f"Error fitting SVM pipeline directly after CV check: {e}",
+                "Error fitting SVM pipeline directly due to low "
+                + f"min_samples_class: {e}",
                 exc_info=True
             )
         return best_estimator, None
@@ -304,16 +355,19 @@ def _train_svm_model_with_gridsearch(
         n_jobs=-1, error_score="raise", refit=True
     )
     try:
+        logger.info(f"Starting GridSearchCV with cv={n_splits_cv}...")
         gs.fit(X_hp_train, y_hp_train)
         best_estimator = gs.best_estimator_
         cv_results_data = gs.cv_results_
         logger.info(f"Best SVM Params from GridSearchCV: {gs.best_params_}")
+        logger.info(f"Best F1 Macro (CV): {gs.best_score_:.4f}")
     except Exception as e:
         logger.error(f"Error in GridSearchCV for SVM: {e}", exc_info=True)
         logger.info(
             "Attempting to fit pipeline directly after GridSearchCV failure."
         )
         try:
+            # fit the passed pipeline
             pipeline.fit(X_hp_train, y_hp_train)
             best_estimator = pipeline
         except Exception as e_fit:
@@ -325,130 +379,230 @@ def _train_svm_model_with_gridsearch(
     return best_estimator, cv_results_data
 
 
-def _evaluate_svm_on_test_set(
-    best_svm_estimator: BaseEstimator,
-    X_test: NDArray[np.float64],
-    y_test: NDArray[np.int_],
+def _evaluate_model(
+    estimator: BaseEstimator,
+    X_set: Optional[NDArray[np.float64]],
+    y_set: Optional[NDArray[np.int_]],
     master_label_set: Set[int],
+    set_name: str,
     fusion_config_key: str,
-) -> Tuple[float, float, float, Optional[NDArray[np.int_]]]:
-    """Evaluates the model on the test data.
+    results_dir: pathlib.Path,
+) -> Tuple[float, float, float, str]:
+    """Evaluates the model on a given data set and logs/saves results.
 
-    :param best_svm_estimator: best loaded model after training.
-    :param X_test: the testing data.
-    :param y_test: the labels of the testing data.
+    :param estimator: the trained model.
+    :param X_set: the input test set.
+    :param y_set: the target test set.
     :param master_label_set: all unique labels across all data encountered.
+    :param set_name: a string for the set name.
     :param fusion_config_key: the fusion strategy key.
+    :param results_dir: the path to the results directory.
     :return: a tuple containing the accuracy, f1 score, ROC AUC score,
-             confusion matrix
+             and report
     """
     acc, f1, roc_auc_val = np.nan, np.nan, np.nan
+    report_str = "Evaluation not performed or failed."
     cm_data = None
+
+    logger.info(
+        f"--- Evaluating on {set_name} set for config "
+        + f"'{fusion_config_key}' ---"
+    )
+
+    if X_set is None or y_set is None or X_set.size == 0 or y_set.size == 0:
+        logger.warning(
+            f"Data for {set_name} set is empty or not provided. "
+            "Skipping evaluation."
+        )
+        report_str = f"{set_name} set empty. Evaluation skipped."
+        return acc, f1, roc_auc_val, report_str
+
+    if not master_label_set:
+        logger.error(
+            f"Master label set is empty for {set_name} set evaluation."
+            " Cannot proceed."
+        )
+        return acc, f1, roc_auc_val, "Master label set empty."
+
     sorted_labels = sorted(list(master_label_set))
+    display_labels = [f"Class {lab}" for lab in sorted_labels]
 
     try:
-        y_pred = best_svm_estimator.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, average="macro", zero_division=0)
-        cm_data = confusion_matrix(y_test, y_pred, labels=sorted_labels)
+        y_pred = estimator.predict(X_set)
+        acc = accuracy_score(y_set, y_pred)
+        f1 = f1_score(y_set, y_pred, average="macro", zero_division=0)
+        cm_data = confusion_matrix(y_set, y_pred, labels=sorted_labels)
 
-        unique_y_test_labels = np.unique(y_test)
-        if len(unique_y_test_labels) > 1:
+        unique_y_set_labels = np.unique(y_set)
+        if len(unique_y_set_labels) > 1 and \
+                hasattr(estimator, "predict_proba"):
             try:
-                y_proba = best_svm_estimator.predict_proba(X_test)
-                roc_auc_labels = sorted_labels
-                # check for mismtach
-                if y_proba.shape[1] == len(unique_y_test_labels) and \
-                        len(unique_y_test_labels) < len(sorted_labels):
-                    roc_auc_labels = sorted(list(unique_y_test_labels))
-                elif y_proba.shape[1] != len(roc_auc_labels):
+                y_proba = estimator.predict_proba(X_set)
+
+                # use estimator's known classes for ROC AUC labels
+                roc_auc_calc_labels = (
+                    estimator.classes_ if hasattr(estimator, 'classes_') and
+                    len(estimator.classes_) == y_proba.shape[1]
+                    else sorted_labels
+                )
+
+                # check if y_proba columns match roc_auc_calc_labels length
+                if y_proba.shape[1] != len(roc_auc_calc_labels):
                     logger.warning(
-                        f"predict_proba columns ({y_proba.shape[1]}) do not "
-                        f"match number of labels ({len(roc_auc_labels)}) for "
-                        "ROC AUC. ROC AUC may be unreliable or fail."
+                        f"({set_name} set, config {fusion_config_key})"
+                        f" predict_proba columns ({y_proba.shape[1]}) "
+                        "do not match effective labels for ROC AUC "
+                        f"({len(roc_auc_calc_labels)}). Adjusting."
                     )
+                    # fallback
+                    if y_proba.shape[1] == len(unique_y_set_labels):
+                        roc_auc_calc_labels = unique_y_set_labels
 
                 roc_auc_val = roc_auc_score(
-                    y_test, y_proba, multi_class="ovr", average="macro",
-                    labels=roc_auc_labels
+                    y_set, y_proba, multi_class="ovr", average="macro",
+                    labels=roc_auc_calc_labels
                 )
             except ValueError as roc_e:
                 logger.warning(
+                    f"({set_name} set, config {fusion_config_key}) "
                     f"Could not compute ROC AUC (ValueError): {roc_e}."
-                    f" Config: {fusion_config_key}"
                 )
+                roc_auc_val = np.nan
             except Exception as e_proba:
                 logger.error(
-                    f"Error during predict or ROC AUC calculation: {e_proba}",
+                    f"({set_name} set, config {fusion_config_key}) Error "
+                    f"during predict_proba or ROC AUC calculation: {e_proba}",
                     exc_info=True
                 )
+                roc_auc_val = np.nan
+        elif not hasattr(estimator, "predict_proba"):
+            logger.warning(
+                "Estimator does not have predict_proba method. "
+                f"ROC AUC not computed for {set_name} set."
+            )
+            roc_auc_val = np.nan
         else:
             logger.warning(
-                f"Cannot compute ROC AUC for config {fusion_config_key}: "
-                f"y_test has only {len(unique_y_test_labels)} unique classes)."
+                f"({set_name} set, config {fusion_config_key})"
+                " ROC AUC not computed: y_set has only"
+                f" {len(unique_y_set_labels)} unique class(es)."
             )
+            roc_auc_val = np.nan
 
-        logger.info(f"SVM Test Performance (Config: {fusion_config_key}):")
-        # target_names must match the number of labels used in the report
         report_target_names = [f"Class {lab}" for lab in sorted_labels]
-        if len(np.unique(y_pred)) < len(sorted_labels) or \
-                len(unique_y_test_labels) < len(sorted_labels):
-            # classification report must warn if y_pred and y_test contain
-            # different labels
-            pass
-        report = classification_report(
-            y_test, y_pred, zero_division=0, labels=sorted_labels,
-            target_names=report_target_names,
+        report_str = classification_report(
+            y_set, y_pred, labels=sorted_labels,
+            target_names=report_target_names, zero_division=0
         )
-        logger.info(f"\n{report}")
         logger.info(
-            f"Confusion Matrix (Config: {fusion_config_key}):\n{cm_data}"
+            f"SVM {set_name} Performance (Config: {fusion_config_key}):"
         )
+        logger.info(f"\n{report_str}")
+        logger.info(
+            f"Accuracy: {acc:.4f}, Macro F1: {f1:.4f}, ROC AUC (OVR Macro):"
+            f" {roc_auc_val if not np.isnan(roc_auc_val) else 'N/A'}"
+        )
+
+        if cm_data is not None:
+            logger.info(
+                f"Confusion Matrix ({set_name} - Config: "
+                f"{fusion_config_key}):\n{cm_data}")
+            cm_save_path = results_dir / f"cm_{fusion_config_key}_{set_name.lower().replace(' ', '_')}.png"
+            plot_confusion_matrix(
+                cm_data, display_labels,
+                f"CM - {fusion_config_key} - {set_name}",
+                cm_save_path
+            )
 
     except Exception as e:
         logger.error(
-            f"Error during SVM evaluation for config {fusion_config_key}: {e}",
+            f"Error during SVM {set_name} evaluation for config "
+            + f"{fusion_config_key}: {e}",
             exc_info=True
         )
+        report_str = f"Evaluation failed for {set_name} set: {e}"
 
-    return acc, f1, roc_auc_val, cm_data
+    return acc, f1, roc_auc_val, report_str
 
 
 def _log_overall_results(
         results_by_config: DefaultDict[str, ResultMetrics]) -> None:
     """Logs the overall results of the SVM model for each configuration.
 
-    :param results_by_config: a dictionary where keys are configuration
-                             names (strings) and values are ResultMetrics
-                             objects containing the results of the SVM model
-                             for that configuration.
+    :param results_by_config: dictionary containing the results.
     """
-    logger.info("\n\n--- Overall Results for SVM Model ---")
+    logger.info("\n\n--- Overall Summary of SVM Model Runs ---")
     for config_name, results in results_by_config.items():
-        if results["count"] > 0 and \
-                any(not np.isnan(x) for x in results["accuracy"]):
+        if results["count"] == 0:
             logger.info(
-                f"\nConfiguration: {config_name} (Processed {results['count']}"
-                + " times - typically 1 per config)"
+                f"\nConfiguration: {config_name} - "
+                "No successful runs completed."
             )
-            logger.info(
-                f"Mean Accuracy: {np.nanmean(results['accuracy']):.4f} +/-"
-                f" {np.nanstd(results['accuracy']):.4f}"
-            )
-            logger.info(
-                f"Mean Macro F1-score: {np.nanmean(results['f1_macro']):.4f}"
-                + f" +/- {np.nanstd(results['f1_macro']):.4f}"
-            )
-            logger.info(
-                "Mean ROC AUC (OVR Macro): "
-                + f"{np.nanmean(results['roc_auc_ovr']):.4f} +/- "
-                + f"{np.nanstd(results['roc_auc_ovr']):.4f}"
-            )
-        else:
-            logger.error(
-                "No valid results or all results are NaN for SVM "
-                f"configuration: {config_name}"
-            )
+            continue
+
+        logger.info(
+            f"\nConfiguration: {config_name} (Processed "
+            f"{results['count']} time(s))"
+        )
+
+        for set_key_prefix, set_name_display in [
+            ("train_", "Training"),
+            ("val_", "Validation"),
+            ("test_", "Test")
+        ]:
+            acc_key = f"{set_key_prefix}accuracy"
+            f1_key = f"{set_key_prefix}f1_macro"
+            roc_key = f"{set_key_prefix}roc_auc_ovr"
+            # report_key = f"{set_key_prefix}classification_report"
+
+            # check whether there are validation data
+            has_valid_data_for_set = False
+            if results.get(acc_key) and \
+                    not all(np.isnan(v) for v in results[acc_key]):
+                has_valid_data_for_set = True
+
+            if not has_valid_data_for_set:
+                if set_key_prefix == "val_" and results.get(acc_key) and \
+                        all(np.isnan(v) for v in results[acc_key]):
+                    logger.info(
+                        f"  --- {set_name_display} Set Metrics: "
+                        "Skipped or No Data ---"
+                    )
+                continue
+
+            logger.info(f"  --- {set_name_display} Set Metrics ---")
+
+            metric_map = [
+                ("Accuracy", acc_key), ("Macro F1-score", f1_key),
+                ("ROC AUC (OVR Macro)", roc_key)
+            ]
+            for metric_name, data_key in metric_map:
+                metric_values = results.get(data_key, [])
+                mean_val = (
+                    np.nanmean(metric_values) if metric_values else np.nan
+                )
+
+                valid_metric_values = [
+                    v for v in metric_values if not np.isnan(v)
+                ]
+                std_val = (
+                    np.std(valid_metric_values)
+                    if len(valid_metric_values) > 1 else 0.0
+                )
+
+                mean_str = (
+                    f"{mean_val:.4f}" if not np.isnan(mean_val) else "nan"
+                )
+                if len(valid_metric_values) > 1:
+                    std_str = f"{std_val:.4f}"
+                elif len(valid_metric_values) == 1:
+                    std_str = "0.0000 (1 run)"
+                else:
+                    std_str = "nan"
+
+                logger.info(f"  Mean {metric_name}: {mean_str} +/- {std_str}")
+
+    logger.info("--- End of Overall Summary ---")
 
 
 # plotting functions
@@ -509,12 +663,12 @@ def plot_learning_curve(
         fig, ax = plt.subplots(figsize=(10, 6))
         train_sizes_abs, train_scores, val_scores = learning_curve(
             estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes,
-            scoring="accuracy"
+            scoring="accuracy", error_score=np.nan
         )
-        train_scores_mean = np.mean(train_scores, axis=1)
-        train_scores_std = np.std(train_scores, axis=1)
-        val_scores_mean = np.mean(val_scores, axis=1)
-        val_scores_std = np.std(val_scores, axis=1)
+        train_scores_mean = np.nanmean(train_scores, axis=1)
+        train_scores_std = np.nanstd(train_scores, axis=1)
+        val_scores_mean = np.nanmean(val_scores, axis=1)
+        val_scores_std = np.nanstd(val_scores, axis=1)
 
         ax.fill_between(train_sizes_abs, train_scores_mean - train_scores_std,
                         train_scores_mean + train_scores_std, alpha=0.1,
@@ -561,73 +715,121 @@ def plot_grid_search_results(
     try:
         scores = cv_results["mean_test_score"]
 
-        c_values = cv_results[f"param_{param_C}"]
-        gamma_values = cv_results[f"param_{param_gamma}"]
+        # ensure params exist in cv_results
+        param_C_key = f"param_{param_C}"
+        param_gamma_key = f"param_{param_gamma}"
 
-        # check if they are masked arrays and convert if necessary
+        if param_C_key not in cv_results or param_gamma_key not in cv_results:
+            logger.warning(
+                f"One or both params ({param_C_key}, {param_gamma_key}) "
+                "not in cv_results. Skipping GS plot."
+            )
+            # plot for single params if available
+            if param_C_key in cv_results and \
+                    len(np.unique(cv_results[param_C_key].compressed())) > 1:
+                c_values = cv_results[param_C_key].compressed()
+                unique_Cs = sorted(np.unique(c_values.astype(float)))
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.plot(unique_Cs, scores[:len(unique_Cs)], 'o-')
+                ax.set_xlabel(param_C.split('__')[-1])
+                ax.set_ylabel("Mean F1 Macro (Validation)")
+                ax.set_title(title)
+                ax.set_xscale('log')
+                plt.tight_layout()
+                fig.savefig(save_path)
+                plt.close(fig)
+                logger.info(
+                    "GridSearchCV results plot (1D for C) saved "
+                    f"to: {save_path}"
+                )
+                return
+            elif (
+                param_gamma_key in cv_results and 
+                len(np.unique(cv_results[param_gamma_key].compressed())) > 1
+            ):
+                gamma_values = cv_results[param_gamma_key].compressed()
+                unique_gammas = sorted(np.unique(gamma_values.astype(str)))
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.plot(unique_gammas, scores[:len(unique_gammas)], 'o-')
+                ax.set_xlabel(param_gamma.split('__')[-1])
+                ax.set_ylabel("Mean F1 Macro (Validation)")
+                ax.set_title(title)
+                plt.tight_layout()
+                fig.savefig(save_path)
+                plt.close(fig)
+                logger.info(
+                    "GridSearchCV results plot (1D for gamma) saved "
+                    f"to: {save_path}"
+                )
+                return
+            else:
+                logger.warning(
+                    "Not enough varying parameters to plot GridSearchCV"
+                    " results meaningfully."
+                )
+                return
+
+        c_values = cv_results[param_C_key]
+        gamma_values = cv_results[param_gamma_key]
+
         if isinstance(c_values, np.ma.MaskedArray):
             c_values = c_values.compressed()
         if isinstance(gamma_values, np.ma.MaskedArray):
             gamma_values = gamma_values.compressed()
 
         unique_Cs = sorted(np.unique(c_values.astype(float)))
-        unique_gammas = sorted(np.unique(gamma_values.astype(str)))
+        unique_gammas_str = sorted(np.unique(gamma_values.astype(str)))
 
-        # 2D heatmap
-        if len(unique_Cs) > 1 and len(unique_gammas) > 1:
-            scores_reshaped = (
-                scores.reshape(len(unique_Cs), len(unique_gammas))
-            )
+        if len(unique_Cs) > 1 and len(unique_gammas_str) > 1:
+            try:
+                scores_reshaped = scores.reshape(
+                    len(unique_Cs), len(unique_gammas_str)
+                )
+            except ValueError:
+                logger.error(
+                    f"Could not reshape scores for GS plot. Check cv_results "
+                    f"structure. Number of C values: {len(unique_Cs)}, "
+                    f"Gamma values: {len(unique_gammas_str)}, "
+                    f"Scores length: {len(scores)}"
+                )
+                return
+
             fig, ax = plt.subplots(figsize=(10, 8))
-            im = ax.imshow(scores_reshaped,
-                           interpolation="nearest",
-                           cmap=plt.cm.viridis)
-            ax.figure.colorbar(im, ax=ax)
-            ax.set_xlabel(param_gamma)
-            ax.set_ylabel(param_C)
+            im = ax.imshow(
+                scores_reshaped, interpolation="nearest",
+                cmap=plt.cm.viridis, aspect='auto'
+            )
+            ax.figure.colorbar(im, ax=ax, label="Mean F1 Macro (Validation)")
+            ax.set_xlabel(param_gamma.split('__')[-1])
+            ax.set_ylabel(param_C.split('__')[-1])
             ax.set_xticks(
-                np.arange(len(unique_gammas)),
-                labels=unique_gammas,
-                rotation=45,
-                ha="right")
+                np.arange(len(unique_gammas_str)), labels=unique_gammas_str,
+                rotation=45, ha="right"
+            )
             ax.set_yticks(
                 np.arange(len(unique_Cs)),
                 labels=[f"{c:.4f}" for c in unique_Cs]
             )
-            ax.set_title(f"{title}\nMean F1 Macro (Validation)")
-            # loop over data dimensions and create text annotations.
+            ax.set_title(f"{title}")
+
             for i in range(len(unique_Cs)):
-                for j in range(len(unique_gammas)):
+                for j in range(len(unique_gammas_str)):
+                    if scores_reshaped[i, j] < (scores_reshaped.max() * 0.6):
+                        text_color = "w" 
+                    else:
+                        text_color = "black"
                     ax.text(
-                        j, i,
-                        f"{scores_reshaped[i, j]:.3f}",
-                        ha="center",
-                        va="center",
-                        color=(
-                            "w"
-                            if scores_reshaped[i, j]
-                            < (scores_reshaped.max() * 0.6)
-                            else "black"
-                        ),
+                        j, i, f"{scores_reshaped[i, j]:.3f}", ha="center",
+                        va="center", color=text_color
                     )
         elif len(unique_Cs) > 1:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.plot(unique_Cs, scores[:len(unique_Cs)], 'o-')
-            ax.set_xlabel(param_C)
-            ax.set_ylabel("Mean F1 Macro (Validation)")
-            ax.set_title(title)
-            ax.set_xscale('log')
-        elif len(unique_gammas) > 1:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            str_gammas = [str(g) for g in unique_gammas]
-            ax.plot(str_gammas, scores[:len(unique_gammas)], 'o-')
-            ax.set_xlabel(param_gamma)
-            ax.set_ylabel("Mean F1 Macro (Validation)")
-            ax.set_title(title)
+            pass
+        elif len(unique_gammas_str) > 1:
+            pass
         else:
             logger.warning(
-                "Not enough varying parameters to plot GridSearchCV"
-                " results meaningfully."
+                "Not enough varying parameters for a 2D heatmap in "
+                "GridSearchCV results."
             )
             return
 
@@ -643,167 +845,260 @@ def plot_grid_search_results(
         )
 
 
-def main_svm() -> None:
-    """Main function for training and evaluating the SVM model.
+def _convert_to_json_serializable(item: Any) -> Any:
+    """Recursively converts items in a dictionary or list for JSON.
 
-    The model train on various fusion configurations.
+    Converts np.nan to None, np.ndarray to list, and numpy scalars
+    to Python types.
     """
+    if isinstance(item, dict):
+        return {k: _convert_to_json_serializable(v) for k, v in item.items()}
+    elif isinstance(item, list):
+        return [_convert_to_json_serializable(i) for i in item]
+    elif isinstance(item, np.ndarray):
+        return item.tolist()
+    elif isinstance(item, (np.generic,)):
+        return item.item()
+    elif isinstance(item, float) and np.isnan(item):
+        return None
+    return item
+
+
+def main_svm() -> None:
     logger.info(f"Plotting outputs will be saved to: {RESULTS_DIR}")
 
     results_by_config: DefaultDict[str, ResultMetrics] = defaultdict(
-        lambda: {"accuracy": [], "f1_macro": [], "roc_auc_ovr": [], "count": 0}
+        lambda: { # Ensures all keys are present with empty lists
+            "test_accuracy": [], "test_f1_macro": [], "test_roc_auc_ovr": [],
+            "test_classification_report": [], "train_accuracy": [],
+            "train_f1_macro": [], "train_roc_auc_ovr": [],
+            "train_classification_report": [],
+            "val_accuracy": [], "val_f1_macro": [], "val_roc_auc_ovr": [],
+            "val_classification_report": [],
+            "count": 0
+        }
     )
     master_label_set: Set[int] = set()
 
     for config_idx, fusion_config_key in enumerate(CONFIGS_TO_RUN):
         logger.info(
             f"\n--- Processing Fusion Configuration {config_idx + 1}/"
-            + f"{len(CONFIGS_TO_RUN)}: {fusion_config_key} ---"
+            f"{len(CONFIGS_TO_RUN)}: {fusion_config_key} ---"
         )
 
-        # load data for the current fusion configuration
+        # get current config results
+        current_config_results = results_by_config[fusion_config_key]
+        current_config_results["count"] = 1
+
+        def _populate_nan_results(results_dict_ref: ResultMetrics, reason: str):
+            for prefix in ["train_", "val_", "test_"]:
+                results_dict_ref[f"{prefix}accuracy"].append(np.nan)
+                results_dict_ref[f"{prefix}f1_macro"].append(np.nan)
+                results_dict_ref[f"{prefix}roc_auc_ovr"].append(np.nan)
+                results_dict_ref[f"{prefix}classification_report"].append(
+                    reason
+                )
+
         (
             X_train, y_train, X_val, y_val, X_test, y_test,
             feature_names, error_occurred
         ) = load_data(fusion_config_key, SPLITS_DIR)
 
-        current_config_results = results_by_config[fusion_config_key]
-        current_config_results["count"] += 1
+        # initial data integrity check
+        data_load_successful = not error_occurred and \
+            X_train is not None and y_train is not None and \
+            X_test is not None and y_test is not None and \
+            X_train.size > 0 and y_train.size > 0 and \
+            X_test.size > 0 and y_test.size > 0
 
-        if error_occurred or X_train is None or y_train is None or \
-                X_test is None or y_test is None:
-            logger.error(
-                "Failed to load or prepare data for config "
-                f"'{fusion_config_key}'. Skipping."
+        if not data_load_successful:
+            error_msg = (
+                f"Data loading failed or data is empty for config "
+                f"'{fusion_config_key}'."
             )
-            current_config_results["accuracy"].append(np.nan)
-            current_config_results["f1_macro"].append(np.nan)
-            current_config_results["roc_auc_ovr"].append(np.nan)
-            continue
-
-        # update master label set with labels from this configuration
-        master_label_set.update(y_train)
-        if y_val is not None:
-            master_label_set.update(y_val)
-        master_label_set.update(y_test)
-
-        logger.info(
-            "Building SVM Pipeline and Training Model for "
-            f"'{fusion_config_key}'..."
-        )
-
-        svm_pipeline = _build_svm_pipeline(
-            X_train, X_val, imblearn_available, SMOTE
-        )
-
-        # prepare data for hyperparameter tuning
-        X_hp_train_svm: NDArray[np.float64] = X_train
-        y_hp_train_svm: NDArray[np.int_] = y_train
-        if X_val is not None and y_val is not None and \
-                X_val.size > 0 and y_val.size > 0:
-            X_hp_train_svm = np.vstack((X_train, X_val))
-            y_hp_train_svm = np.concatenate((y_train, y_val))
-        X_hp_train_svm, y_hp_train_svm = shuffle(
-            X_hp_train_svm, y_hp_train_svm, random_state=42
-        )
-
-        svm_param_grid = {
-            "svm__C": [0.1, 1, 10, 50, 100],
-            "svm__gamma": [1e-5, 1e-4, 1e-3, 1e-2, 0.1, "scale", "auto"],
-        }
-
-        best_svm_estimator, cv_results = _train_svm_model_with_gridsearch(
-            svm_pipeline, svm_param_grid, X_hp_train_svm, y_hp_train_svm
-        )
-
-        save_path = RESULTS_DIR / f"gs_results_{fusion_config_key}.png"
-        if cv_results:
-            plot_grid_search_results(
-                cv_results, param_C="svm__C", param_gamma="svm__gamma",
-                title=f"GridSearchCV Results - {fusion_config_key}",
-                save_path=save_path
-            )
-
-        if best_svm_estimator:
-            acc, f1, roc_auc, cm_data = _evaluate_svm_on_test_set(
-                best_svm_estimator, X_test, y_test, master_label_set,
-                fusion_config_key
-            )
-            current_config_results["accuracy"].append(acc)
-            current_config_results["f1_macro"].append(f1)
-            current_config_results["roc_auc_ovr"].append(roc_auc)
-
-            display_labels = [f"Class {lab}"
-                              for lab in sorted(list(master_label_set))]
-            save_path = RESULTS_DIR / f"cm_{fusion_config_key}.png"
-            if cm_data is not None:
-                plot_confusion_matrix(
-                    cm_data,
-                    display_labels=display_labels,
-                    title=f"Confusion Matrix - {fusion_config_key}",
-                    save_path=save_path
-                )
-
-            # SAVE THE MODEL
-            model_path = RESULTS_DIR / f"svm_model_{fusion_config_key}.joblib"
-
-            try:
-                joblib.dump(best_svm_estimator, model_path)
-                logger.info(
-                    "Successfully saved best model for config "
-                    f"'{fusion_config_key}' to: {model_path}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to save model for config '{fusion_config_key}'."
-                    f" Error: {e}", exc_info=True
-                )
-
-            final_svc_model = None
-            if hasattr(best_svm_estimator, 'named_steps') and \
-                    'svm' in best_svm_estimator.named_steps:
-                final_svc_model = best_svm_estimator.named_steps['svm']
-            elif isinstance(best_svm_estimator, SVC):
-                final_svc_model = best_svm_estimator
-
-            save_path = RESULTS_DIR / f"lc_{fusion_config_key}.png"
-            if final_svc_model:
-                plot_learning_curve(
-                    final_svc_model,
-                    title=f"Learning Curve SVM - {fusion_config_key}",
-                    X=X_hp_train_svm, y=y_hp_train_svm,
-                    save_path=save_path
-                )
-            else:
-                logger.warning(
-                    "Could not extract final SVC model for learning curve"
-                    + f" plotting for config {fusion_config_key}"
-                )
-
+            logger.error(error_msg)
+            _populate_nan_results(current_config_results, error_msg)
         else:
-            logger.warning(
-                f"No best SVM model found for config '{fusion_config_key}'."
-                + " Appending NaNs."
+            master_label_set.update(y_train)
+            if y_val is not None and y_val.size > 0:
+                master_label_set.update(y_val)
+            master_label_set.update(y_test)
+
+            if not master_label_set:
+                error_msg = (
+                    f"Master label set is empty for config {fusion_config_key}"
+                    " after data load."
+                )
+                logger.error(error_msg)
+                _populate_nan_results(current_config_results, error_msg)
+            else:
+                logger.info(
+                    f"Building SVM Pipeline and Training Model for "
+                    f"'{fusion_config_key}'..."
+                )
+                try:
+                    svm_pipeline = _build_svm_pipeline(
+                        X_train, X_val, imblearn_available, SMOTE
+                    )
+
+                    X_hp_train_svm = X_train
+                    y_hp_train_svm = y_train
+                    if X_val is not None and y_val is not None and \
+                            X_val.size > 0 and y_val.size > 0:
+                        logger.info(
+                            "Combining X_train and X_val for GridSearchCV"
+                            " hyperparameter tuning."
+                        )
+                        X_hp_train_svm = np.vstack((X_train, X_val))
+                        y_hp_train_svm = np.concatenate((y_train, y_val))
+
+                    if X_hp_train_svm.size == 0 or y_hp_train_svm.size == 0:
+                        error_msg = (
+                            f"HP tuning data empty for config "
+                            f"'{fusion_config_key}'."
+                        )
+                        logger.error(error_msg)
+                        _populate_nan_results(
+                            current_config_results, error_msg
+                        )
+                    else:
+                        X_hp_train_svm, y_hp_train_svm = shuffle(
+                            X_hp_train_svm, y_hp_train_svm, random_state=42
+                        )
+                        svm_param_grid = {
+                            "svm__C": [0.1, 1, 10, 50, 100],
+                            "svm__gamma": [1e-5, 1e-4, 1e-3, 1e-2, 0.1,
+                                           "scale", "auto"],
+                        }
+                        best_svm_estimator, cv_results = (
+                            _train_svm_model_with_gridsearch(
+                                svm_pipeline, svm_param_grid,
+                                X_hp_train_svm, y_hp_train_svm
+                            )
+                        )
+
+                        gs_plot_save_path = (
+                            RESULTS_DIR / f"gs_results_{fusion_config_key}.png"
+                        )
+                        if cv_results:
+                            plot_grid_search_results(
+                                cv_results, param_C="svm__C",
+                                param_gamma="svm__gamma",
+                                title=f"GridSearchCV Results - {fusion_config_key}",
+                                save_path=gs_plot_save_path
+                            )
+
+                        if best_svm_estimator:
+                            # evaluate on Training set
+                            train_acc, train_f1, train_roc, train_report = _evaluate_model(
+                                best_svm_estimator, X_train, y_train, master_label_set, "Training", fusion_config_key, RESULTS_DIR)
+                            current_config_results["train_accuracy"].append(train_acc)
+                            current_config_results["train_f1_macro"].append(train_f1)
+                            current_config_results["train_roc_auc_ovr"].append(train_roc)
+                            current_config_results["train_classification_report"].append(train_report)
+
+                            # evaluate on Validation set
+                            if X_val is not None and y_val is not None and X_val.size > 0:
+                                val_acc, val_f1, val_roc, val_report = _evaluate_model(
+                                    best_svm_estimator, X_val, y_val, master_label_set, "Validation", fusion_config_key, RESULTS_DIR)
+                                current_config_results["val_accuracy"].append(val_acc)
+                                current_config_results["val_f1_macro"].append(val_f1)
+                                current_config_results["val_roc_auc_ovr"].append(val_roc)
+                                current_config_results["val_classification_report"].append(val_report)
+                            else:
+                                current_config_results["val_accuracy"].append(np.nan)
+                                current_config_results["val_f1_macro"].append(np.nan)
+                                current_config_results["val_roc_auc_ovr"].append(np.nan)
+                                current_config_results["val_classification_report"].append("Validation set not available or empty.")
+
+                            # evaluate on Test set
+                            test_acc, test_f1, test_roc, test_report = _evaluate_model(
+                                best_svm_estimator, X_test, y_test, master_label_set, "Test", fusion_config_key, RESULTS_DIR)
+                            current_config_results["test_accuracy"].append(test_acc)
+                            current_config_results["test_f1_macro"].append(test_f1)
+                            current_config_results["test_roc_auc_ovr"].append(test_roc)
+                            current_config_results["test_classification_report"].append(test_report)
+
+                            model_path = (
+                                RESULTS_DIR / f"svm_model_{fusion_config_key}.joblib"
+                            )
+                            try:
+                                joblib.dump(best_svm_estimator, model_path)
+                                logger.info(
+                                    f"Successfully saved best model for "
+                                    f"'{fusion_config_key}' to: {model_path}"
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to save model for "
+                                    f"'{fusion_config_key}'. Error: {e}",
+                                    exc_info=True
+                                )
+
+                            final_model_for_lc = best_svm_estimator
+                            lc_save_path = (
+                                RESULTS_DIR / f"lc_{fusion_config_key}.png"
+                            )
+                            lc_cv_splits = 3
+                            if y_hp_train_svm.size > 0:
+                                unique_classes_lc, counts_lc = np.unique(
+                                    y_hp_train_svm, return_counts=True
+                                )
+                                if len(unique_classes_lc) > 1 and \
+                                        counts_lc.size > 0 and \
+                                        np.min(counts_lc) >= 2:
+                                    lc_cv_splits = min(5, np.min(counts_lc))
+
+                            plot_learning_curve(
+                                final_model_for_lc,
+                                title=f"Learning Curve - {fusion_config_key}",
+                                X=X_hp_train_svm, y=y_hp_train_svm,
+                                save_path=lc_save_path, cv=lc_cv_splits)
+                        else:
+                            error_msg = (
+                                f"No best SVM model found after training for "
+                                f"config '{fusion_config_key}'."
+                            )
+                            logger.warning(error_msg)
+                            _populate_nan_results(
+                                current_config_results, error_msg)
+
+                except Exception as pipeline_error:
+                    error_msg = f"Critical error during pipeline/training for '{fusion_config_key}': {pipeline_error}"
+                    logger.error(error_msg, exc_info=True)
+                    _populate_nan_results(current_config_results, error_msg)
+
+        # save metrics
+        json_save_path = RESULTS_DIR / f"metrics_{fusion_config_key}.json"
+        try:
+            serializable_results = _convert_to_json_serializable(
+                dict(current_config_results)
             )
-            current_config_results["accuracy"].append(np.nan)
-            current_config_results["f1_macro"].append(np.nan)
-            current_config_results["roc_auc_ovr"].append(np.nan)
+            with open(json_save_path, 'w') as f:
+                json.dump(serializable_results, f, indent=4)
+            logger.info(
+                f"Metrics for '{fusion_config_key}' saved to: {json_save_path}"
+            )
+        except Exception as e_json:
+            logger.error(
+                f"Failed to save metrics to JSON for '{fusion_config_key}':"
+                + f" {e_json}",
+                exc_info=True
+            )
 
     _log_overall_results(results_by_config)
 
 
 if __name__ == "__main__":
-    """Function for testing the SVM model."""
     logger.info(f"Project Root: {PROJECT_ROOT}")
     logger.info(f"Splits Directory used by SVM: {SPLITS_DIR}")
+    logger.info(f"Results Directory: {RESULTS_DIR}")
     if not SPLITS_DIR.exists():
         logger.error(
-            f"SPLITS_DIR does not exist: {SPLITS_DIR}."
-            "Please create it or check path."
-        )
-        logger.error(
-            "Ensure that `loso_cv.py` has run and saved its output "
-            "into this directory."
+            f"SPLITS_DIR does not exist: {SPLITS_DIR}. "
+            "Please create it or check path. "
+            "Ensure that feature extraction and splitting (e.g., loso_cv.py) "
+            "has run and saved its output into this directory."
         )
     else:
         main_svm()
