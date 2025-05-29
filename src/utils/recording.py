@@ -3,6 +3,11 @@
 from enum import Enum
 from os import listdir
 from os.path import basename, dirname
+from typing import Any, Dict
+
+from mne.io import read_raw_edf
+
+from src.utils.plotting import plot_signals_mne
 
 
 class StudyType(Enum):
@@ -42,8 +47,7 @@ class Recording:
             self.anno_path = next(
                 directory + "/" + f
                 for f in listdir(directory)
-                if f.startswith(f"ST7{self.patient_number:02d}{self.night}")
-                and f.endswith("Hypnogram.edf")
+                if f.startswith(f"ST7{self.patient_number:02d}{self.night}") and f.endswith("Hypnogram.edf")
             )
 
         elif file_name.startswith("SC4"):  # Cassette
@@ -55,8 +59,7 @@ class Recording:
             self.anno_path = next(
                 directory + "/" + f
                 for f in listdir(directory)
-                if f.startswith(f"SC4{self.patient_number:02d}{self.night}")
-                and f.endswith("Hypnogram.edf")
+                if f.startswith(f"SC4{self.patient_number:02d}{self.night}") and f.endswith("Hypnogram.edf")
             )
 
         else:
@@ -68,7 +71,23 @@ class Recording:
         Returns:
             str: String representation of the Recording class
         """
-        return (
-            f"Recording: {self.study_type.value}, Patient-"
-            f"{self.patient_number}, Night-{self.night}"
-        )
+        return f"Recording: {self.study_type.value}, Patient-" f"{self.patient_number}, Night-{self.night}"
+
+    def dict(self) -> Dict[str, Any]:
+        """Convert Recording to dictionary for JSON serialization.
+
+        Returns:
+            dict: Dictionary representation of the Recording class
+        """
+        return {
+            "file_path": self.file_path,
+            "anno_path": self.anno_path,
+            "study_type": self.study_type.value,
+            "patient_number": self.patient_number,
+            "night": self.night,
+        }
+
+    def visualize(self) -> None:
+        """Visualize the recording."""
+        raw_data = read_raw_edf(self.file_path, preload=True, verbose=False)
+        plot_signals_mne(recording=self, raw=raw_data, annotations=True)

@@ -1,15 +1,12 @@
 """Plotting functions."""
 
-from os.path import basename
-from typing import Optional
+from typing import Any, Optional
 
 import mne
 
-from src.utils.recording import Recording
-
 
 def plot_signals_mne(
-    recording: Recording,
+    recording: Any,  # it is a recording but to avoid circular imports use Any
     annotations: bool = True,
     raw: Optional[mne.io.BaseRaw] = None,
     channels: Optional[list[str]] = None,
@@ -23,8 +20,6 @@ def plot_signals_mne(
         the file.
         channels (list): List of channel names to plot.
     """
-    file_name = basename(recording.file_path)
-
     if raw is None:
         raw = mne.io.read_raw_edf(recording.file_path, preload=True)
     if channels is None:
@@ -36,6 +31,6 @@ def plot_signals_mne(
     raw.plot(
         picks=channels,
         block=True,
-        title=f"PSG Data - {file_name}",
+        title=f"PSG Data - Paient {recording.patient_number}, Night {recording.night}",
         show_options=True,
     )
