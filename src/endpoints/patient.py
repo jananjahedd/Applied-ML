@@ -1,159 +1,187 @@
-"""Patient endpoints."""
+# src/endpoints/patient.py
+"""Patient data management endpoints - focused on loaded EDF data organization."""
 
-from typing import Any, Dict
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, status
+import os
 
-from fastapi import APIRouter, HTTPException  # type: ignore
-from starlette.status import (  # type: ignore
-    HTTP_200_OK,
-    HTTP_404_NOT_FOUND,
-    HTTP_500_INTERNAL_SERVER_ERROR,
+from src.schemas import (
+    PatientInfo,
+    ResponseMessage,
+    AllPatientsResponse
 )
+from src.utils.logger import get_logger
 
-from src.endpoints.data import patients, selected_filenames
-from src.utils.patient import patient_from_filepath
+logger = get_logger("patient")
 
-router = APIRouter(prefix="/patient", tags=["Patient"])
+patients_data_store: Dict[str, Dict[str, Any]] = {}
+
+from .files import selected_filenames
+
+router = APIRouter(prefix="/patient", tags=["Patient Data"])
 
 
-@router.get(  # type: ignore
+@router.get(
+    "/{patient_id}",
+    summary="Get information for a specific patient",
+    description="Retrieve metadata for a patient whose EDF file has been processed.",
+    response_model=PatientInfo
+)
+def get_patient_info(patient_id: str) -> PatientInfo:
+    """Get patient information by patient ID."""
+    if patient_id not in patients_data_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient {patient_id} not found. Use POST /patient/register to add patient metadata."
+        )
+
+    patient_data = patients_data_store[patient_id]
+    return PatientInfo(**patient_data)
+
+
+@router.get(
     "/",
-    summary="Get Patient Information",
-    description="Returns the patient information",
-    responses={
-        HTTP_200_OK: {
-            "description": "Patient information retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "patient": {
-                            "number": 123,
-                            "age": 45,
-                        }
-                    }
-                }
-            },
-        },
-        HTTP_404_NOT_FOUND: {
-            "description": "Patient not found",
-            "content": {"application/json": {"example": {"message": "Patient not found."}}},
-        },
-    },
+    summary="Get all registered patients",
+    description="Retrieve metadata for all patients in the system.",
+    response_model=AllPatientsResponse
 )
-def get_patient_info() -> Dict[int, Any]:
-    """Get patient information."""
-    if not patients:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="No patients loaded.")
+def get_all_patients() -> AllPatientsResponse:
+    """Get information for all registered patients."""
+    if not patients_data_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No patients registered. Use POST /patient/register to add patient metadata."
+        )
 
-    response = {}
-    for patient_number, patient in patients.items():
-        response[patient_number] = {
-            "number": patient.number,
-            "age": patient.age,
-            "sex": patient.sex.value,
-            "num_recordings": len(patient.recordings),
-        }
-    return response
+    patients_dict = {
+        patient_id: PatientInfo(**patient_data)
+        for patient_id, patient_data in patients_data_store.items()
+    }
+
+    return AllPatientsResponse(patients=patients_dict)
 
 
-@router.get(  # type: ignore
-    "/{patient_number}",
-    summary="Get Patient by Number",
-    description="Returns the patient information for the given patient number",
-    responses={
-        HTTP_200_OK: {
-            "description": "Patient information retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "patient": {
-                            "number": 123,
-                            "age": 45,
-                        }
-                    }
-                }
-            },
-        },
-        HTTP_404_NOT_FOUND: {
-            "description": "Patient not found",
-            "content": {"application/json": {"example": {"message": "Patient not found."}}},
-        },
-    },
+@router.post(
+    "/register",
+    summary="Register patient metadata",
+    description="Register metadata for a patient. This is separate from EDF processing.",
+    response_model=ResponseMessage
 )
-def get_patient_by_number(patient_number: int) -> Dict[str, Any]:
-    """Get patient information by patient number."""
-    if patient_number not in patients:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Patient not found.")
+def register_patient(
+    patient_id: str,
+    age: int = None,
+    sex: str = None,
+    additional_info: Dict[str, Any] = None
+) -> ResponseMessage:
+    """Register or update patient metadata."""
 
-    return patients[patient_number].dict()
+    # Basic validation
+    if age is not None and (age < 0 or age > 150):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Age must be between 0 and 150"
+        )
+
+    if sex is not None and sex.lower() not in ['male', 'female', 'm', 'f', 'other']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sex must be one of: male, female, m, f, other"
+        )
+
+    patient_data = {
+        "number": int(patient_id) if patient_id.isdigit() else hash(patient_id) % 10000,
+        "age": age,
+        "sex": sex.lower() if sex else None,
+        "num_recordings": 0
+    }
+
+    if additional_info:
+        patient_data.update(additional_info)
+
+    patients_data_store[patient_id] = patient_data
+
+    action = "updated" if patient_id in patients_data_store else "registered"
+    return ResponseMessage(message=f"Patient {patient_id} {action} successfully.")
 
 
-@router.post(  # type: ignore
-    "/load",
-    summary="Load patients from selected files",
-    description="Load patients from the selected files in the example-data directory.",
-    responses={
-        HTTP_200_OK: {
-            "description": "Patient added successfully",
-            "content": {"application/json": {"example": {"message": "Patient added successfully."}}},
-        },
-        HTTP_404_NOT_FOUND: {
-            "description": "No selected files found",
-            "content": {"application/json": {"example": {"message": "No selected files found."}}},
-        },
-        HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "Internal server error",
-            "content": {"application/json": {"example": {"message": "An error occurred while loading the patient."}}},
-        },
-    },
+@router.delete(
+    "/{patient_id}",
+    summary="Remove patient from system",
+    description="Remove patient metadata from the system.",
+    response_model=ResponseMessage
 )
-async def load_patient() -> Dict[str, str]:
-    """Load patient data from selected files."""
-    if not selected_filenames:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="No selected files found.")
-    try:
-        for idx, file in selected_filenames.items():
-            patients[idx] = patient_from_filepath(file)
-        return {"message": "Patient loaded successfully."}
-    except Exception as e:
-        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+def remove_patient(patient_id: str) -> ResponseMessage:
+    """Remove patient from the system."""
+    if patient_id not in patients_data_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient {patient_id} not found."
+        )
+
+    del patients_data_store[patient_id]
+    return ResponseMessage(message=f"Patient {patient_id} removed successfully.")
 
 
-@router.get(  # type: ignore
-    "/{patient_number}/visualize-recording/{recording_number}",
-    summary="Visualize a Patient's Recording",
-    description="Opens an interactive plot of the patient's recording",
-    responses={
-        HTTP_200_OK: {
-            "description": "Plot visualized successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "message": "Plot viualization successful.",
-                    }
-                }
-            },
-        },
-        HTTP_404_NOT_FOUND: {
-            "description": "Patient not found",
-            "content": {"application/json": {"example": {"message": "Patient not found."}}},
-        },
-        HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "Internal server error",
-            "content": {"application/json": {"example": {"message": "An error occurred while visualizing the data."}}},
-        },
-    },
+@router.post(
+    "/link-to-file",
+    summary="Link patient to processed EDF file",
+    description="Associate a patient with a processed EDF file from the files endpoint.",
+    response_model=ResponseMessage
 )
-def visualize_recording(patient_number: int, recording_number: int) -> Dict[str, Any]:
-    """Returns a visualization of the patient's recording."""
-    if patient_number not in patients:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Patient not found.")
-    if recording_number not in patients[patient_number].recordings:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Recording not found.")
+def link_patient_to_file(patient_id: str, file_id: str) -> ResponseMessage:
+    """Link a patient to a selected EDF file."""
 
-    try:
-        patient = patients[patient_number]
-        recording = patient.recordings[recording_number]
-        recording.visualize()
-        return {"message": "Plot visualization successful."}
-    except Exception as e:
-        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    if patient_id not in patients_data_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient {patient_id} not found. Register patient first."
+        )
+
+    if file_id not in selected_filenames:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File ID {file_id} not found in selected files. Select the file first using /files/select."
+        )
+
+    patients_data_store[patient_id]["num_recordings"] = patients_data_store[patient_id].get("num_recordings", 0) + 1
+    patients_data_store[patient_id]["linked_files"] = patients_data_store[patient_id].get("linked_files", [])
+
+    if file_id not in patients_data_store[patient_id]["linked_files"]:
+        patients_data_store[patient_id]["linked_files"].append(file_id)
+
+    file_path = selected_filenames[file_id]
+    return ResponseMessage(
+        message=f"Patient {patient_id} linked to file {file_id} ({os.path.basename(file_path)}) successfully."
+    )
+
+
+@router.get(
+    "/{patient_id}/files",
+    summary="Get files linked to patient",
+    description="Get all EDF files linked to a specific patient.",
+    response_model=Dict[str, Any]
+)
+def get_patient_files(patient_id: str) -> Dict[str, Any]:
+    """Get all files linked to a patient."""
+    if patient_id not in patients_data_store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient {patient_id} not found."
+        )
+
+    patient_data = patients_data_store[patient_id]
+    linked_files = patient_data.get("linked_files", [])
+
+    file_details = {}
+    for file_id in linked_files:
+        if file_id in selected_filenames:
+            file_details[file_id] = {
+                "path": selected_filenames[file_id],
+                "filename": os.path.basename(selected_filenames[file_id])
+            }
+
+    return {
+        "patient_id": patient_id,
+        "linked_files": file_details,
+        "total_files": len(file_details)
+    }
