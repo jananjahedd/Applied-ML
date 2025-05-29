@@ -27,10 +27,7 @@ def get_logger(name: str, log_file: str = "") -> logging.Logger:
 
     if not logger.hasHandlers():
         formatter = logging.Formatter(
-            fmt=(
-                "%(asctime)s - %(name)s - %(levelname)s - "
-                + "%(module)s - %(funcName)s - %(message)s"
-            ),
+            fmt=("%(asctime)s - %(name)s - %(levelname)s - " + "%(module)s - %(funcName)s - %(message)s"),
             datefmt="%d-%m-%Y %H:%M:%S",
         )
 
