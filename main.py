@@ -49,7 +49,10 @@ async def startup_event():
             if os.path.exists(model_path):
                 available_models.append(config)
 
-        print(f"Found {len(available_models)} trained models: {available_models}")
+        print(
+            f"Found {len(available_models)} trained models: "
+            f"{available_models}"
+        )
 
     print("Application startup complete!")
 
@@ -58,7 +61,10 @@ async def startup_event():
 async def read_root():
     """Provides a welcome message and API status."""
     return ResponseMessage(
-        message="Welcome to the Sleep Stage Prediction API! Use /docs to explore endpoints."
+        message=(
+            "Welcome to the Sleep Stage Prediction API! "
+            "Use /docs to explore endpoints."
+        )
     )
 
 
