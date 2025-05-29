@@ -16,19 +16,15 @@ import mne
 import numpy as np
 from autoreject import get_rejection_threshold  # type: ignore
 
-try:
-    SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent.parent
-except NameError:
-    SCRIPT_DIR = pathlib.Path(".").resolve()
-    PROJECT_ROOT = SCRIPT_DIR.parent.parent
-    print(f"Warning: __file__ not found. Assuming script dir: {SCRIPT_DIR}")
-    print(f"Derived project root: {PROJECT_ROOT}")
+from src.utils.paths import (get_data_dir, get_processed_data_dir,
+                             get_repo_root)
+from src.utils.logger import get_logger
 
 
+PROJECT_ROOT = pathlib.Path(get_repo_root())
 DATA_SUBFOLDER = "sleep-cassette"
-DATA_DIR = PROJECT_ROOT / "data" / DATA_SUBFOLDER
-PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data" / DATA_SUBFOLDER
+DATA_DIR = pathlib.Path(get_data_dir()) / DATA_SUBFOLDER
+PROCESSED_DATA_DIR = pathlib.Path(get_processed_data_dir()) / DATA_SUBFOLDER
 
 N_SUBJECTS_TO_PROCESS = 10
 EPOCH_DURATION = 30.0
@@ -62,29 +58,8 @@ EVENT_ID_MAP = {
     "Unknown/Movement": 0,
 }
 
-
-def info_log(message: str) -> None:
-    """Log an informational message.
-
-    :param message: The message string to log.
-    """
-    print(f"INFO: {message}")
-
-
-def warning_log(message: str) -> None:
-    """Log a warning message.
-
-    :param message: The message string to log.
-    """
-    print(f"WARNING: {message}")
-
-
-def error_log(message: str) -> None:
-    """Log an error message.
-
-    :param message: The message string to log.
-    """
-    print(f"ERROR: {message}")
+# setup logger
+logger = get_logger("preprocessing")
 
 
 def bandpass_filter(
@@ -104,7 +79,7 @@ def bandpass_filter(
     if high_freq >= nyquist_freq:
         effective_high_freq = nyquist_freq - 0.5
         if low_freq >= effective_high_freq:
-            error_log(
+            logger.error(
                 f"Cannot filter {signal_type}: Low ({low_freq}) >= Adj. "
                 f"High ({effective_high_freq}). Filter skipped."
             )
@@ -117,7 +92,9 @@ def bandpass_filter(
     elif signal_type == "emg":
         picks = mne.pick_types(raw.info, meg=False, emg=True, exclude="bads")
     else:
-        warning_log(f"Unknown signal type '{signal_type}' for bandpass filtering.")
+        logger.warning(
+            f"Unknown signal type '{signal_type}' for bandpass filtering."
+        )
         return raw
     if picks is not None and len(picks) > 0:
         try:
@@ -132,11 +109,15 @@ def bandpass_filter(
                 verbose=False,
             )
         except Exception as e:
-            error_log(f"Error applying bandpass filter for {signal_type}: {e}")
+            logger.error(
+                f"Error applying bandpass filter for {signal_type}: {e}"
+            )
     return raw
 
 
-def notch_filter(raw: mne.io.BaseRaw, freq: float, signal_type: str) -> mne.io.BaseRaw:
+def notch_filter(
+        raw: mne.io.BaseRaw,
+        freq: float, signal_type: str) -> mne.io.BaseRaw:
     """Apply a notch FIR filter to specified channel types in raw data.
 
     :param raw: The MNE Raw object to filter.
@@ -156,7 +137,7 @@ def notch_filter(raw: mne.io.BaseRaw, freq: float, signal_type: str) -> mne.io.B
     elif signal_type == "emg":
         picks = mne.pick_types(raw.info, meg=False, emg=True, exclude="bads")
     else:
-        warning_log(f"Unknown signal '{signal_type}' for notch filtering.")
+        logger.warning(f"Unknown signal '{signal_type}' for notch filtering.")
         return raw
     if picks is not None and len(picks) > 0:
         try:
@@ -169,7 +150,7 @@ def notch_filter(raw: mne.io.BaseRaw, freq: float, signal_type: str) -> mne.io.B
                 verbose=False,
             )
         except Exception as e:
-            error_log(f"Error applying notch filter for {signal_type}: {e}")
+            logger.error(f"Error applying notch filter for {signal_type}: {e}")
     return raw
 
 
@@ -207,11 +188,13 @@ def plot_signals_mne(
         5: "purple",
         0: "gray",
     }
-    if (show_annotations and raw.annotations is not None and len(raw.annotations)) > 0:
+    if (show_annotations and raw.annotations is not None and
+            len(raw.annotations)) > 0:
         try:
             events_from_annot, event_dict_from_annot_mapping = (
                 mne.events_from_annotations(
-                    raw, event_id=ANNOTATION_MAP, chunk_duration=None, verbose=False
+                    raw, event_id=ANNOTATION_MAP, chunk_duration=None,
+                    verbose=False
                 )
             )
             if events_from_annot.size > 0:
@@ -230,11 +213,13 @@ def plot_signals_mne(
                 }
         except ValueError as ve:
             if "No matching events found for" in str(ve):
-                warning_log("No annotations in raw matched ANNOTATION_MAP")
+                logger.warning("No annotations in raw matched ANNOTATION_MAP")
             else:
-                warning_log(f"Could not create events : {ve}")
+                logger.warning(f"Could not create events : {ve}")
         except Exception as e:
-            warning_log(f"Could not create events for plotting signals: {e}")
+            logger.warning(
+                f"Could not create events for plotting signals: {e}"
+            )
     raw.plot(**plot_kwargs)
 
 
@@ -279,38 +264,42 @@ def plot_epochs_mne(
     )
 
 
-if __name__ == "__main__":
+def preprocess_pipeline():
+    """Main function to preprocess the raw data."""
     mne.set_log_level("INFO")
     start_time_total = time.time()
-    info_log(f"Project Root: {PROJECT_ROOT}")
-    info_log(f"Data Directory: {DATA_DIR}")
-    info_log(f"Processed Data Directory: {PROCESSED_DATA_DIR}")
+    logger.info(f"Project Root: {PROJECT_ROOT}")
+    logger.info(f"Data Directory: {DATA_DIR}")
+    logger.info(f"Processed Data Directory: {PROCESSED_DATA_DIR}")
 
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     all_psg_files = []
     try:
         if not DATA_DIR.is_dir():
-            raise FileNotFoundError(f"Data directory does not exist: {DATA_DIR}")
+            raise FileNotFoundError(
+                f"Data directory does not exist: {DATA_DIR}")
         all_psg_files = sorted(list(DATA_DIR.glob("SC*-PSG.edf")))
         if not all_psg_files:
-            error_log(f"No PSG files matching 'SC*-PSG.edf' found in {DATA_DIR}.")
+            logger.error(
+                f"No PSG files matching 'SC*-PSG.edf' found in {DATA_DIR}."
+            )
             exit()
-        info_log(f"Found {len(all_psg_files)} PSG files.")
+        logger.info(f"Found {len(all_psg_files)} PSG files.")
     except FileNotFoundError as e:
-        error_log(str(e))
+        logger.error(str(e))
         exit()
     except Exception as e:
-        error_log(f"Error finding files: {e}")
+        logger.error(f"Error finding files: {e}")
         exit()
 
     files_to_process = all_psg_files[:N_SUBJECTS_TO_PROCESS]
-    info_log(
+    logger.info(
         f"Attempting to process the first {len(files_to_process)} "
         f"subject(s) using Global AR (EEG/EOG) + Fixed (EMG)..."
     )
     if len(all_psg_files) < N_SUBJECTS_TO_PROCESS:
-        info_log(
+        logger.info(
             f"Found fewer files ({len(all_psg_files)}) than requested ("
             f"{N_SUBJECTS_TO_PROCESS}), processing all found."
         )
@@ -321,7 +310,7 @@ if __name__ == "__main__":
     for i, psg_file_path in enumerate(files_to_process):
         start_time_subject = time.time()
         subject_id = psg_file_path.stem.replace("-PSG", "")
-        info_log(
+        logger.info(
             f"--- Processing Subject {i+1}/{len(files_to_process)}: "
             f"{subject_id} ---"
         )
@@ -331,49 +320,54 @@ if __name__ == "__main__":
         try:
             base_id = subject_id[:6]
             if not (
-                base_id.startswith("SC") and len(base_id) == 6 and base_id[2:].isdigit()
+                base_id.startswith("SC") and len(base_id) == 6 and
+                base_id[2:].isdigit()
             ):
                 raise ValueError(
                     "Unexpected subject ID format for " + f"glob: {subject_id}"
                 )
 
-            hypno_files_found = list(DATA_DIR.glob(f"{base_id}*-Hypnogram.edf"))
+            hypno_files_found = list(DATA_DIR.glob(
+                f"{base_id}*-Hypnogram.edf"))
 
             if len(hypno_files_found) == 1:
                 hypno_file_path = hypno_files_found[0]
-                info_log(f"Found hypnogram: {hypno_file_path.name}")
+                logger.info(f"Found hypnogram: {hypno_file_path.name}")
             elif len(hypno_files_found) > 1:
                 psg_suffix_part = subject_id[6:]
                 best_match = None
                 for h_file in hypno_files_found:
                     h_stem_parts = h_file.stem.split("-")
-                    if len(h_stem_parts) > 0 and h_stem_parts[0].startswith(base_id):
-                        h_suffix_part = h_stem_parts[0][len(base_id) :]
+                    if len(h_stem_parts) > 0 and \
+                            h_stem_parts[0].startswith(base_id):
+                        h_suffix_part = h_stem_parts[0][len(base_id):]
                         if psg_suffix_part == h_suffix_part:
                             best_match = h_file
                             break
                 if best_match:
                     hypno_file_path = best_match
-                    warning_log(
+                    logger.warning(
                         f"Multiple hypnos for {base_id}, used suffix "
                         + f"match: {hypno_file_path.name}"
                     )
                 else:
                     hypno_file_path = hypno_files_found[0]
-                    warning_log(
+                    logger.warning(
                         f"Multiple hypnos for {base_id}, used first "
                         + f"found: {hypno_file_path.name}"
                     )
             else:
-                warning_log(
+                logger.warning(
                     "No hypnogram file matching pattern "
                     + f"'{base_id}*-Hypnogram.edf' found for {subject_id}."
                 )
 
         except ValueError as ve_glob:
-            error_log(f"Error parsing ID for hypnogram search (glob): {ve_glob}")
+            logger.error(
+                f"Error parsing ID for hypnogram search (glob): {ve_glob}"
+            )
         except Exception as e_glob:
-            error_log(
+            logger.error(
                 f"Error searching for hypnogram file for {subject_id} "
                 + f"(glob): {e_glob}"
             )
@@ -382,7 +376,7 @@ if __name__ == "__main__":
 
         try:
             raw = None
-            info_log(f"Loading: {psg_file_path.name}")
+            logger.info(f"Loading: {psg_file_path.name}")
             exclude_ch = ["Event marker", "Marker", "Status"]
             try:
                 with mne.utils.use_log_level("WARNING"):
@@ -392,24 +386,25 @@ if __name__ == "__main__":
                         exclude=exclude_ch,
                         infer_types=True,
                     )
-                info_log(
+                logger.info(
                     f"Data loaded. SFreq: {raw.info['sfreq']:.2f} Hz. "
                     f"Channels ({len(raw.ch_names)}): {raw.ch_names}"
                 )
             except Exception as e:
-                error_log(f"Failed to load {psg_file_path.name}: {e}")
+                logger.error(f"Failed to load {psg_file_path.name}: {e}")
                 failed_subjects.append(subject_id)
                 continue
 
             eog_channel_name = "horizontal"
             if eog_channel_name in raw.ch_names:
                 try:
-                    current_type = raw.get_channel_types(picks=[eog_channel_name])[0]
+                    current_type = raw.get_channel_types(
+                        picks=[eog_channel_name])[0]
                     if current_type != "eog":
                         raw.set_channel_types({eog_channel_name: "eog"})
-                        info_log(f"Set type '{eog_channel_name}' to 'eog'.")
+                        logger.info(f"Set type '{eog_channel_name}' to 'eog'.")
                 except Exception as e:
-                    warning_log(
+                    logger.warning(
                         f"Could not set channel type for '{eog_channel_name}"
                         + f"': {e}"
                     )
@@ -419,57 +414,63 @@ if __name__ == "__main__":
                     temp_annots = mne.read_annotations(hypno_file_path)
                     raw.set_annotations(temp_annots, emit_warning=False)
                     annotations_loaded = True
-                    info_log(f"Annotations set from {hypno_file_path.name}")
+                    logger.info(f"Annotations set from {hypno_file_path.name}")
                 except Exception as e:
-                    warning_log(
+                    logger.warning(
                         f"Could not load or set annotations from "
                         f"{hypno_file_path.name}: {e}"
                     )
 
             current_sfreq = raw.info["sfreq"]
             if current_sfreq != TARGET_SFREQ:
-                info_log(
+                logger.info(
                     f"Resampling data from {current_sfreq:.2f} Hz to "
                     f"{TARGET_SFREQ:.2f} Hz..."
                 )
                 try:
-                    raw.resample(sfreq=TARGET_SFREQ, npad="auto", verbose=False)
-                    info_log("Resampling complete.")
+                    raw.resample(sfreq=TARGET_SFREQ, npad="auto",
+                                 verbose=False)
+                    logger.info("Resampling complete.")
                 except Exception as e:
-                    error_log(f"Error during resampling: {e}. Skipping.")
+                    logger.error(f"Error during resampling: {e}. Skipping.")
                     failed_subjects.append(subject_id)
                     continue
 
-            info_log("Applying filters...")
+            logger.info("Applying filters...")
             raw = bandpass_filter(raw, EEG_BANDPASS[0], EEG_BANDPASS[1], "eeg")
             raw = bandpass_filter(raw, EOG_BANDPASS[0], EOG_BANDPASS[1], "eog")
             raw = bandpass_filter(raw, EMG_BANDPASS[0], EMG_BANDPASS[1], "emg")
             nyquist = TARGET_SFREQ / 2.0
             if NOTCH_FREQ < nyquist:
-                info_log(f"Applying {NOTCH_FREQ} Hz notch filter...")
-                if NOTCH_FREQ > EEG_BANDPASS[0] and NOTCH_FREQ < EEG_BANDPASS[1]:
+                logger.info(f"Applying {NOTCH_FREQ} Hz notch filter...")
+                if NOTCH_FREQ > EEG_BANDPASS[0] and \
+                        NOTCH_FREQ < EEG_BANDPASS[1]:
                     raw = notch_filter(raw, NOTCH_FREQ, "eeg")
-                if NOTCH_FREQ > EOG_BANDPASS[0] and NOTCH_FREQ < EOG_BANDPASS[1]:
+                if NOTCH_FREQ > EOG_BANDPASS[0] and \
+                        NOTCH_FREQ < EOG_BANDPASS[1]:
                     raw = notch_filter(raw, NOTCH_FREQ, "eog")
-                if NOTCH_FREQ > EMG_BANDPASS[0] and NOTCH_FREQ < EMG_BANDPASS[1]:
+                if NOTCH_FREQ > EMG_BANDPASS[0] and \
+                        NOTCH_FREQ < EMG_BANDPASS[1]:
                     raw = notch_filter(raw, NOTCH_FREQ, "emg")
             else:
-                warning_log(
+                logger.warning(
                     f"Notch frequency {NOTCH_FREQ} Hz >= Nyquist "
                     f"{nyquist} Hz. Skipping notch filter."
                 )
-            info_log("Filtering complete.")
+            logger.info("Filtering complete.")
 
             epochs = None
             if annotations_loaded:
-                info_log("Creating epochs based on loaded annotations...")
+                logger.info("Creating epochs based on loaded annotations...")
                 try:
-                    events, event_ids_from_annot_func = mne.events_from_annotations(
-                        raw,
-                        event_id=ANNOTATION_MAP,
-                        chunk_duration=EPOCH_DURATION,
-                        verbose=False,
-                    )
+                    events, event_ids_from_annot_func = (
+                        mne.events_from_annotations(
+                            raw,
+                            event_id=ANNOTATION_MAP,
+                            chunk_duration=EPOCH_DURATION,
+                            verbose=False,
+                            )
+                        )
                     if events.shape[0] > 0:
                         present_numeric_ids = np.unique(events[:, 2])
                         epochs_event_id_map = {
@@ -478,7 +479,7 @@ if __name__ == "__main__":
                             if stage_id in present_numeric_ids
                         }
                         if not epochs_event_id_map:
-                            warning_log("Falling back.")
+                            logger.warning("Falling back.")
                             annotations_loaded = False
                         else:
                             epochs = mne.Epochs(
@@ -492,22 +493,24 @@ if __name__ == "__main__":
                                 reject_by_annotation=True,
                                 verbose=False,
                             )
-                            info_log(
+                            logger.info(
                                 f"Created {len(epochs)} labeled epochs "
                                 f"from annotations. Event IDs: "
                                 f"{epochs.event_id}"
                             )
                     else:
-                        warning_log("Falling back.")
+                        logger.warning("Falling back.")
                         annotations_loaded = False
                 except Exception as e:
-                    error_log(f"Error during annotation-based epoch creation: {e}")
+                    logger.error(
+                        f"Error during annotation-based epoch creation: {e}"
+                    )
                     traceback.print_exc()
-                    warning_log("Falling back to fixed-length epochs.")
+                    logger.warning("Falling back to fixed-length epochs.")
                     annotations_loaded = False
 
             if not annotations_loaded:
-                info_log("Creating fixed-length epochs...")
+                logger.info("Creating fixed-length epochs...")
                 try:
                     epochs = mne.make_fixed_length_epochs(
                         raw,
@@ -516,26 +519,28 @@ if __name__ == "__main__":
                         overlap=0.0,
                         verbose=False,
                     )
-                    info_log(f"Created {len(epochs)} unlabeled epochs.")
+                    logger.info(f"Created {len(epochs)} unlabeled epochs.")
                 except Exception as e:
-                    error_log(f"Failed to create fixed-length epochs: {e}")
+                    logger.error(f"Failed to create fixed-length epochs: {e}")
                     failed_subjects.append(subject_id)
                     continue
 
             if epochs is None or len(epochs) == 0:
-                warning_log("Zero epochs created. Skipping subject.")
+                logger.warning("Zero epochs created. Skipping subject.")
                 failed_subjects.append(subject_id)
                 continue
             initial_epoch_count = len(epochs)
-            info_log(f"Initial epoch count before rejection: {initial_epoch_count}")
+            logger.info(
+                f"Initial epoch count before rejection: {initial_epoch_count}"
+            )
 
-            info_log("Applying Global Autoreject")
+            logger.info("Applying Global Autoreject")
             epochs_clean = epochs.copy()
             final_reject_dict = {}
             applied_method = "preceding steps (AR failed/skipped)"
 
             try:
-                info_log("Computing global thresholds for EEG/EOG...")
+                logger.info("Computing global thresholds for EEG/EOG...")
                 ar_reject_dict = get_rejection_threshold(
                     epochs,
                     decim=AUTOREJECT_DECIM,
@@ -544,13 +549,13 @@ if __name__ == "__main__":
                 )
 
                 if ar_reject_dict:
-                    info_log(
+                    logger.info(
                         f"Global Autoreject found EEG/EOG thresholds: "
                         f"{ar_reject_dict}"
                     )
                     final_reject_dict.update(ar_reject_dict)
                 else:
-                    warning_log(
+                    logger.warning(
                         "get_rejection_threshold did not return "
                         + "EEG/EOG thresholds."
                     )
@@ -563,35 +568,41 @@ if __name__ == "__main__":
                     exclude="bads",
                 )
                 if len(emg_picks) > 0:
-                    info_log(
-                        "Adding fixed EMG threshold: " + f"{FIXED_EMG_THRESHOLD:.2e} V"
+                    logger.info(
+                        "Adding fixed EMG threshold: "
+                        + f"{FIXED_EMG_THRESHOLD:.2e} V"
                     )
                     final_reject_dict["emg"] = FIXED_EMG_THRESHOLD
 
                 if final_reject_dict:
-                    info_log("Applying combined thresholds: " + f"{final_reject_dict}")
-                    epochs_clean.drop_bad(reject=final_reject_dict, verbose=False)
+                    logger.info("Applying combined thresholds: "
+                                + f"{final_reject_dict}")
+                    epochs_clean.drop_bad(
+                        reject=final_reject_dict, verbose=False
+                    )
                     applied_method = "Global AR (EEG/EOG) + Fixed (EMG)"
                 else:
-                    warning_log("No rejection thresholds defined.")
+                    logger.warning("No rejection thresholds defined.")
 
             except Exception as e:
-                error_log(f"Error during combined rejection processing: {e}")
+                logger.error(
+                    f"Error during combined rejection processing: {e}"
+                )
                 traceback.print_exc()
-                warning_log("Proceeding with original epochs due to error.")
+                logger.warning("Proceeding with original epochs due to error.")
                 epochs_clean = epochs.copy()
 
             final_epoch_count = len(epochs_clean)
-            info_log(f"Final clean epoch count: {final_epoch_count}")
+            logger.info(f"Final clean epoch count: {final_epoch_count}")
             dropped_count = initial_epoch_count - final_epoch_count
             if initial_epoch_count > 0:
                 drop_percentage = (dropped_count / initial_epoch_count) * 100
-                info_log(
+                logger.info(
                     f"Epochs dropped by {applied_method}: "
-                    f"{dropped_count} ({drop_percentage:.1f}%)."
+                    + f"{dropped_count} ({drop_percentage:.1f}%)."
                 )
             else:
-                info_log("No epochs to drop.")
+                logger.info("No epochs to drop.")
 
             if final_epoch_count > 0:
                 if (
@@ -599,30 +610,34 @@ if __name__ == "__main__":
                     and dropped_count == initial_epoch_count
                     and applied_method != "preceding steps (AR failed/skipped)"
                 ):
-                    warning_log("All epochs were dropped. Nothing saved.")
+                    logger.warning("All epochs were dropped. Nothing saved.")
                     if subject_id not in failed_subjects:
                         failed_subjects.append(subject_id)
                 else:
                     try:
-                        save_path = PROCESSED_DATA_DIR / f"{file_name_base}-epo.fif"
+                        save_path = (
+                            PROCESSED_DATA_DIR / f"{file_name_base}-epo.fif")
                         epochs_clean.save(
-                            save_path, overwrite=True, fmt="single", verbose=False
+                            save_path, overwrite=True, fmt="single",
+                            verbose=False
                         )
-                        info_log(f"Cleaned epochs saved to: {save_path}")
+                        logger.info(f"Cleaned epochs saved to: {save_path}")
                         processed_count += 1
                     except Exception as e:
-                        error_log(
+                        logger.error(
                             f"Failed to save cleaned epochs for "
                             f"{file_name_base}: {e}"
                         )
                         failed_subjects.append(subject_id)
             else:
-                warning_log("No epochs remaining after artifact rejection.")
+                logger.warning("No epochs remaining after artifact rejection.")
                 if subject_id not in failed_subjects:
                     failed_subjects.append(subject_id)
 
         except Exception as e:
-            error_log(f"!! UNEXPECTED error processing subject {subject_id}: {e} !!")
+            logger.error(
+                f"!! UNEXPECTED error processing subject {subject_id}: {e} !!"
+            )
             traceback.print_exc()
             failed_subjects.append(subject_id)
             continue
@@ -630,23 +645,26 @@ if __name__ == "__main__":
         finally:
             del raw, epochs, epochs_clean
             end_time_subject = time.time()
-            info_log(
+            logger.info(
                 f"--- Time taken for {subject_id}: "
                 f"{end_time_subject - start_time_subject:.2f} seconds"
             )
             print("-" * 60)
 
     end_time_total = time.time()
-    info_log("Processing Finished")
-    info_log(
+    logger.info("Processing Finished")
+    logger.info(
         f"Successfully processed and saved "
         f"{processed_count}/{len(files_to_process)} subjects."
     )
     total_minutes = (end_time_total - start_time_total) / 60
-    info_log(f"Total time elapsed: {total_minutes:.2f} minutes.")
+    logger.info(f"Total time elapsed: {total_minutes:.2f} minutes.")
     if failed_subjects:
-        warning_log(
+        logger.warning(
             f"Processing failed for {len(failed_subjects)}"
             f"subject(s): {sorted(list(set(failed_subjects)))}"
         )
 
+
+if __name__ == "__main__":
+    preprocess_pipeline()

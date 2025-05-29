@@ -68,7 +68,9 @@ def time_reverse(epochs: NDArray[np.float64]) -> NDArray[np.float64]:
 
 
 def create_epochs_from_numpy(
-    data_array: NDArray[np.float64], labels_array: NDArray[np.float64], info: mne.Info
+    data_array: NDArray[np.float64],
+    labels_array: NDArray[np.float64],
+    info: mne.Info
 ) -> mne.EpochsArray | None:
     """Helper function to create MNE EpochsArray from numpy arrays.
 
@@ -97,7 +99,9 @@ def create_epochs_from_numpy(
     )
     try:
         epochs = mne.EpochsArray(
-            data_array, info=info, events=events, tmin=0.0, baseline=None, verbose=False
+            data_array, info=info, events=events,
+            tmin=0.0, baseline=None,
+            verbose=False
         )
         return epochs
     except Exception as e:

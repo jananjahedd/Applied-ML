@@ -1,18 +1,18 @@
-"""Module for executing the LOSO CV method on the data.
+"""Module for executing a subject-wise stratified split on the data.
 
-It takes the preprocessed data, performs data
-augmentation on the training splits, and extracts
-features for all splits using a fit/transform pipeline.
+It takes the preprocessed data, splits it into training, validation, and
+test sets ensuring that subjects are not shared across splits. It then
+separates the data by modality (EEG, EMG, EOG), applies data
+augmentation to the training set, and saves each modality's data
+separately for future intermediate fusion.
 """
 
 import pathlib
 from typing import Dict, List, Tuple
-from logging import Logger
 
 import mne
 import numpy as np
-from sklearn.model_selection import LeaveOneGroupOut, train_test_split
-from sklearn.exceptions import NotFittedError
+from sklearn.model_selection import GroupShuffleSplit
 
 from src.data.data_augmentation import (
     create_epochs_from_numpy,
@@ -20,30 +20,36 @@ from src.data.data_augmentation import (
     sign_flip,
     time_reverse,
 )
-
 from src.features.feature_engineering import FeatureEngineering
+from src.utils.logger import get_logger
+
+from src.utils.paths import (get_processed_data_dir,
+                             get_repo_root, get_splits_data)
+
+
+PROJECT_ROOT = pathlib.Path(get_repo_root())
+DATA_SUBFOLDER = "sleep-cassette"
+PROCESSED_DATA_DIR = pathlib.Path(get_processed_data_dir()) / DATA_SUBFOLDER
+SPLITS_DIR = pathlib.Path(get_splits_data())
 
 FUSION_CONFIG: Dict[str, List[str]] = {
-    "eeg_only": ["eeg"],
-    "eeg_eog": ["eeg", "eog"],
-    "eeg_emg": ["eeg", "emg"],
-    "eeg_eog_emg": ["eeg", "eog", "emg"],
+    "eeg": ["eeg"],
+    "eog": ["eog"],
+    "emg": ["emg"],
 }
 
+# setup logger
+logger = get_logger("splitting")
 
-def load_preprocessed_data(
-        processed_data_dir: pathlib.Path,
-        logger: Logger
-        ) -> Tuple[List[mne.Epochs], List[str]]:
-    """Load preprocessed data, perhaps a function that also includes the
-    data paths to the processed files.
-    """
-    logger.info(f"Loading preprocessed data from: {processed_data_dir}")
-    processed_files = sorted(list(processed_data_dir.glob("SC*-epo.fif")))
+
+def load_preprocessed_data() -> Tuple[List[mne.Epochs], List[str]]:
+    """Load preprocessed data from the designated folder"""
+    logger.info(f"Loading preprocessed data from: {PROCESSED_DATA_DIR}")
+    processed_files = sorted(list(PROCESSED_DATA_DIR.glob("SC*-epo.fif")))
 
     if not processed_files:
         logger.error(
-            f"No epoch files (*-epo.fif) found in {processed_data_dir}. "
+            f"No epoch files (*-epo.fif) found in {PROCESSED_DATA_DIR}. "
             "Please run the preprocessing script first."
         )
         exit()
@@ -56,8 +62,7 @@ def load_preprocessed_data(
     for filepath in processed_files:
         try:
             epochs_subject = mne.read_epochs(
-                filepath, preload=True, verbose=False
-            )
+                filepath, preload=True, verbose=False)
             if len(epochs_subject) > 0:
                 subjects_epochs_list.append(epochs_subject)
                 subject_id_str = filepath.stem.replace("-epo", "")
@@ -68,8 +73,7 @@ def load_preprocessed_data(
                 )
             else:
                 logger.warning(
-                    f"Subject {filepath.stem} has zero epochs. Skip."
-                )
+                    f"Subject {filepath.stem} has zero epochs. Skip.")
         except Exception as e:
             logger.error(f"Failed to load epochs from {filepath}: {e}")
 
@@ -85,16 +89,12 @@ def load_preprocessed_data(
     return subjects_epochs_list, subject_ids
 
 
-def prepare_data_for_loso(
-        subjects_epochs_list: List[mne.Epochs],
-        subject_ids: List[str],
-        logger: Logger
-        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Prepare the data before performing loso, so perhaps another
-    function for modularity (optionally it can also go in the load_data).
-    """
+def prepare_data(
+    subjects_epochs_list: List[mne.Epochs],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Prepare the data before performing the split."""
     X_list = [e.get_data() for e in subjects_epochs_list]
-    y_list = [e.events[:, -1].astype(np.int_) for e in subjects_epochs_list]
+    y_list = [e.events[:, -1].astype(np.int64) for e in subjects_epochs_list]
     groups_list = [
         np.full(len(e), i) for i, e in enumerate(subjects_epochs_list)
     ]
@@ -107,167 +107,213 @@ def prepare_data_for_loso(
         f"Combined shapes: X={X.shape}, y={y.shape}, groups={groups.shape}"
     )
     logger.info(f"Unique group identifiers: {np.unique(groups)}")
-    logger.info(f"Number of subjects (groups): {len(subject_ids)}")
 
     return X, y, groups
 
 
-def execute_loso_cv(
-        X: np.ndarray,
-        y: np.ndarray,
-        groups: np.ndarray,
-        subject_ids: List[str],
-        subjects_epochs_list: List[mne.Epochs],
-        fusion_config: Dict[str, List[str]],
-        splits_dir: pathlib.Path,
-        logger: Logger
-        ) -> None:
-    """The big loop for loso, before are initializations and checks."""
+def splitting(
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    subjects_epochs_list: List[mne.Epochs],
+    splits_dir: pathlib.Path
+) -> None:
+    """
+    Performs a subject-wise stratified split, applies augmentation to the
+    training set, and then runs feature engineering.
 
-    loso = LeaveOneGroupOut()
-    n_splits = loso.get_n_splits(X, y, groups)
-    logger.info(f"Number of LOSO splits to generate: {n_splits}")
+    This function ensures that all data from a single subject belongs to
+    exactly one set (train, validation, or test). The splits are
+    stratified by the labels 'y'.
 
-    if n_splits != len(subject_ids):
-        logger.warning(
-            f"Mismatch: Number of splits ({n_splits}) differs "
-            + f"from number of subjects ({len(subject_ids)})."
-        )
+    For each data modality (EEG, EMG, EOG), it performs the following:
+    1. Augments the training data.
+    2. Fits a feature engineering pipeline on the augmented training data.
+    3. Transforms the validation and test data using the fitted pipeline.
+    4. Saves the engineered features for each split into separate .npz files,
+       ready for model training.
+    """
+    logger.info("--- Starting Subject-Wise Stratified Split ---")
+
+    # split data into training and a temporary set
+    train_val_split = GroupShuffleSplit(
+        n_splits=1, test_size=0.3, random_state=42)
+    train_idx, val_test_idx = next(train_val_split.split(X, y, groups))
+
+    X_train, y_train, groups_train = (X[train_idx], y[train_idx],
+                                      groups[train_idx])
+    X_val_test, y_val_test, groups_val_test = (
+        X[val_test_idx],
+        y[val_test_idx],
+        groups[val_test_idx],
+    )
+
+    # split the temporary set into validation and test sets
+    val_test_split = GroupShuffleSplit(
+        n_splits=1, test_size=0.5, random_state=42)
+    val_idx, test_idx = next(val_test_split.split(
+        X_val_test, y_val_test, groups_val_test))
+
+    X_val, y_val, groups_val = (
+        X_val_test[val_idx],
+        y_val_test[val_idx],
+        groups_val_test[val_idx],
+    )
+    X_test, y_test, groups_test = (
+        X_val_test[test_idx],
+        y_val_test[test_idx],
+        groups_val_test[test_idx],
+    )
+
+    logger.info(f"Train set shape: {X_train.shape}, y_train: {y_train.shape}")
+    logger.info(f"Validation set shape: {X_val.shape}, y_val: {y_val.shape}")
+    logger.info(f"Test set shape: {X_test.shape}, y_test: {y_test.shape}")
+    logger.info(f"Subjects in train: {np.unique(groups_train)}")
+    logger.info(f"Subjects in validation: {np.unique(groups_val)}")
+    logger.info(f"Subjects in test: {np.unique(groups_test)}")
 
     base_mne_info = subjects_epochs_list[0].info
     all_ch_names = base_mne_info.ch_names
     all_ch_types = base_mne_info.get_channel_types(unique=False, picks="all")
+    sfreq = base_mne_info["sfreq"]
 
-    for i, (train_idx, test_idx) in enumerate(loso.split(X, y, groups)):
-        X_train, X_test = X[train_idx], X[test_idx]
-        y_train, y_test = y[train_idx], y[test_idx]
+    # loop over each modality to perform augmentation and feature engineering
+    for modality, ch_types_to_include in FUSION_CONFIG.items():
+        logger.info(
+            f"--- Processing all splits for {modality.upper()} modality ---")
 
-        current_test_subj_idx = groups[test_idx][0]
-        test_subj_id = subject_ids[current_test_subj_idx]
+        # select channels and create info object for the current modality
+        selected_ch_indices = [
+            idx
+            for idx, ch_type in enumerate(all_ch_types)
+            if ch_type in ch_types_to_include
+        ]
+        if not selected_ch_indices:
+            logger.warning(f"No channels found for '{modality}'. Skipping.")
+            continue
 
-        logger.info(f"\n--- Processing Split {i+1}/{n_splits} ---")
-        logger.info(f"Test Subject ID (Group): {test_subj_id}")
-
-        X_train_cv, X_val_cv, y_train_cv, y_val_cv = train_test_split(
-            X_train, y_train, test_size=0.2, stratify=y_train, random_state=42
+        selected_ch_names = [all_ch_names[i] for i in selected_ch_indices]
+        modality_ch_types = [all_ch_types[i] for i in selected_ch_indices]
+        modality_info = mne.create_info(
+            ch_names=selected_ch_names, sfreq=sfreq, ch_types=modality_ch_types
         )
 
-        for config, channel_types in fusion_config.items():
-            logger.info(f"--- Processing Fusion Configuration: {config} ---")
+        # slice data for the current modality
+        X_train_modality = X_train[:, selected_ch_indices, :]
+        X_val_modality = X_val[:, selected_ch_indices, :]
+        X_test_modality = X_test[:, selected_ch_indices, :]
 
-            selected_ch_indices = [
-                idx for idx, ch_type in enumerate(all_ch_types)
-                if ch_type in channel_types
-            ]
+        # augment only the training data
+        logger.info(f"Augmenting training data for {modality.upper()}...")
+        X_train_aug_list, y_train_aug_list, groups_train_aug_list = [], [], []
 
-            if not selected_ch_indices:
-                logger.warning(f"No channels for '{config}'. Skipping.")
-                continue
+        if X_train_modality.shape[0] > 0:
+            for i in range(X_train_modality.shape[0]):
+                epoch, label, group = (X_train_modality[i], y_train[i],
+                                       groups_train[i])
 
-            template_info: mne.Info = mne.create_info(
-                ch_names=[all_ch_names[idx] for idx in selected_ch_indices],
-                sfreq=base_mne_info["sfreq"],
-                ch_types=[all_ch_types[idx] for idx in selected_ch_indices],
+                # append original and augmented versions
+                X_train_aug_list.extend([
+                    epoch,
+                    gaussian_noise(epoch.copy(), noise_level=0.1),
+                    sign_flip(epoch.copy()),
+                    time_reverse(epoch.copy())
+                ])
+                y_train_aug_list.extend([label] * 4)
+                groups_train_aug_list.extend([group] * 4)
+
+            X_train_aug = np.array(X_train_aug_list)
+            y_train_aug = np.array(y_train_aug_list)
+            groups_train_aug = np.array(groups_train_aug_list)
+            logger.info(
+                f"Augmented training set for '{modality.upper()}'"
+                + f" shape: {X_train_aug.shape}"
+            )
+        else:
+            X_train_aug, y_train_aug, groups_train_aug = (
+                np.array([]),
+                np.array([]),
+                np.array([]),
+            )
+            logger.info(
+                f"Training set for {modality.upper()} is empty."
+                + " No augmentation performed."
             )
 
-            X_train_subset = X_train_cv[:, selected_ch_indices, :]
-            X_val_subset = X_val_cv[:, selected_ch_indices, :]
-            X_test_subset = X_test[:, selected_ch_indices, :]
+        # feature Engineering
+        logger.info(
+            f"--- Applying Feature Engineering for {modality.upper()} ---")
+        feature_engineer = FeatureEngineering()
 
-            logger.info("Augmenting internal training data...")
-            X_train_aug_list = []
-            y_train_aug_list = []
+        # fit on augmented training data
+        logger.info(
+            f"Fitting on augmented training data for {modality.upper()}.")
+        epochs_train_aug = create_epochs_from_numpy(
+            X_train_aug, y_train_aug, modality_info
+        )
+        X_train_featured, y_train_featured, feature_names = (
+            feature_engineer.fit(epochs_train_aug)
+        )
 
-            if X_train_subset.shape[0] > 0:
-                logger.info(f"Augmenting internal training data ({config})...")
+        # transform validation data
+        logger.info(f"Transforming validation data for {modality.upper()}.")
+        epochs_val = create_epochs_from_numpy(
+            X_val_modality, y_val, modality_info)
+        X_val_featured, y_val_featured = feature_engineer.transform(epochs_val)
 
-                for epoch_idx in range(X_train_subset.shape[0]):
-                    original_epoch = X_train_subset[epoch_idx]
-                    original_label = y_train_cv[epoch_idx]
+        # transform test data
+        logger.info(f"Transforming test data for {modality.upper()}.")
+        epochs_test = create_epochs_from_numpy(
+            X_test_modality, y_test, modality_info)
+        X_test_featured, y_test_featured = feature_engineer.transform(
+            epochs_test)
 
-                    X_train_aug_list.append(original_epoch)
-                    y_train_aug_list.append(original_label)
+        # save the engineered features
+        data_to_save = {
+            "train": (X_train_featured, y_train_featured, groups_train_aug),
+            "val": (X_val_featured, y_val_featured, groups_val),
+            "test": (X_test_featured, y_test_featured, groups_test),
+        }
 
-                    X_train_aug_list.append(
-                        gaussian_noise(original_epoch.copy(), noise_level=0.16)
-                    )
-                    y_train_aug_list.append(original_label)
-
-                    X_train_aug_list.append(sign_flip(original_epoch.copy()))
-                    y_train_aug_list.append(original_label)
-
-                    X_train_aug_list.append(time_reverse(original_epoch.copy())
-                                            )
-                    y_train_aug_list.append(original_label)
-
-                X_train_aug = np.array(X_train_aug_list)
-                y_train_aug = np.array(y_train_aug_list)
-
-                logger.info(
-                    f"Augmented training set for '{config}' "
-                    + f"shape: {X_train_aug.shape}"
-                )
-            else:
-                logger.info(
-                    f"Internal training set (X_train_cv) for {config} empty. "
-                    + "No augmentation performed."
-                )
-                X_train_aug = np.array([])
-                y_train_aug = np.array([])
-
-            feature_pipeline = FeatureEngineering()
-
-            mne_epochs_train = create_epochs_from_numpy(
-                X_train_aug, y_train_aug, template_info)
-            logger.info(f"Extracting & fitting TRAIN features for '{config}'")
-            X_ft_train, y_ft_train, feature_names = feature_pipeline.fit(
-                mne_epochs_train)
-            logger.info(f"Extracted TRAIN features shape: {X_ft_train.shape}")
-
-            mne_epochs_val = create_epochs_from_numpy(
-                X_val_subset, y_val_cv, template_info)
-            logger.info(f"Extracting VALIDATION features for '{config}'...")
-            try:
-                X_ft_val, y_ft_val = feature_pipeline.transform(mne_epochs_val)
-                logger.info(
-                    f"Extracted VALIDATION features shape: {X_ft_val.shape}")
-            except NotFittedError as e:
-                logger.error(f"Validation transform failed: {e}."
-                             + " The pipeline wasn't fitted.")
-                continue
-
-            mne_epochs_test = create_epochs_from_numpy(
-                X_test_subset, y_test, template_info)
-            logger.info(f"Extracting TEST features for '{config}'...")
-            try:
-                X_ft_test, y_ft_test = feature_pipeline.transform(
-                    mne_epochs_test)
-                logger.info(f"Extracted TEST  shape: {X_ft_test.shape}")
-            except NotFittedError as e:
-                logger.error(f"Test transform failed: {e}."
-                             + " The pipeline wasn't fitted.")
-                continue
-
-            split_filename = (
-                f"split_{str(i).zfill(2)}_test_subj_{test_subj_id}_{config}."
-                "npz"
+        for split_name, (X_featured, y_featured,
+                         groups_split) in data_to_save.items():
+            save_filename = f"{split_name}_{modality}_featured.npz"
+            save_path = SPLITS_DIR / save_filename
+            logger.info(
+                f"Saving {split_name} featured data for '{modality}'"
+                + f" to {save_path}"
             )
-            save_path = splits_dir / split_filename
 
-            logger.info(f"Saving split for '{config}' to {save_path}")
-            np.savez_compressed(
-                save_path,
-                X_train=X_ft_train,
-                y_train=y_ft_train,
-                X_val=X_ft_val,
-                y_val=y_ft_val,
-                X_test=X_ft_test,
-                y_test=y_ft_test,
-                feature_names=np.array(feature_names, dtype=object),
-                test_subject_string_id=test_subj_id,
-            )
-            logger.info(f"Successfully saved split data for '{config}'.")
+            # create a data dictionary with the variables to save
+            data_dict = {
+                f'X_{split_name}': X_featured,
+                f'y_{split_name}': y_featured,
+                'subject_group_ids': groups_split,
+                'feature_names': np.array(feature_names, dtype=object)
+            }
+            np.savez_compressed(save_path, **data_dict)
+            logger.info(
+                f"Successfully saved featured data for '{modality.upper()}'.")
 
-        logger.info(f"--- Finished all fusions for LOSO Split {i+1} ---")
+    logger.info("\n--- All data splits processed, engineered, and saved ---")
 
-    logger.info("\n--- All LOSO splits and fusions processed and saved ---")
+
+def main():
+    logger.info(f"Creating output directory: {SPLITS_DIR}")
+    SPLITS_DIR.mkdir(parents=True, exist_ok=True)
+
+    subjects_epochs_list, _ = load_preprocessed_data()
+    X, y, groups = prepare_data(subjects_epochs_list)
+
+    splitting(
+        X=X,
+        y=y,
+        groups=groups,
+        subjects_epochs_list=subjects_epochs_list,
+        splits_dir=SPLITS_DIR,
+    )
+    logger.info("✅ Pipeline finished successfully!")
+
+
+if __name__ == "__main__":
+    main()
