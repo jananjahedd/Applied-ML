@@ -1,0 +1,53 @@
+Slurm Job ID: 17683207
+Running on host: node73
+Job started at: Thu May 29 20:56:48 CEST 2025
+Initial working directory (set by --chdir): /scratch/s5130727/Applied-ML
+Loading Anaconda module...
+Activating Conda environment AML...
+Executing Python script: python -m src.models.modular_svm
+INFO: imblearn library found. SMOTE is available.
+Python script finished.
+Job finished at: Fri May 30 01:10:15 CEST 2025
+
+###############################################################################
+Hábrók Cluster
+Job 17683207 for user s5130727
+Finished at: Fri May 30 01:10:19 CEST 2025
+
+Job details:
+============
+
+Job ID                         : 17683207
+Name                           : svm_train
+User                           : s5130727
+Partition                      : regularmedium
+Nodes                          : node73
+Number of Nodes                : 1
+Cores                          : 32
+Number of Tasks                : 1
+State                          : COMPLETED  
+Submit                         : 2025-05-29T19:39:43
+Start                          : 2025-05-29T20:56:46
+End                            : 2025-05-30T01:10:15
+Reserved walltime              : 1-02:00:00
+Used walltime                  :   04:13:29
+Used CPU time                  : 3-22:37:33 (Efficiency: 69.99%)
+% User (Computation)           : 99.12%
+% System (I/O)                 :  0.88%
+Total memory reserved          : 50G
+Maximum memory used            : 10.12G
+Hints and tips      :
+ 1) The program efficiency is low. Your program is not using the assigned cores
+    effectively. Please check if you are using all the cores you requested.
+    You may also need to check the file in- and output pattern of your program.
+ *) For more information on these issues see:
+    https://wiki.hpc.rug.nl/habrok/additional_information/job_hints
+
+Acknowledgements:
+=================
+
+Please see this page for information about acknowledging Hábrók in your publications:
+
+https://wiki.hpc.rug.nl/habrok/introduction/scientific_output
+
+################################################################################

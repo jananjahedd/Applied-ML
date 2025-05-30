@@ -1,7 +1,6 @@
-# src/endpoints/pipeline.py
+"""Module for the entire pipeline endpoints."""
 import os
 import tempfile
-import pathlib
 from typing import Dict, List, Optional, Any, Tuple
 import joblib
 import numpy as np
@@ -11,12 +10,13 @@ from sklearn.pipeline import Pipeline as SklearnPipeline
 
 from src.schemas import (
     ResponseMessage,
-    PreprocessingOutput,
-    UploadResponse,
-    PredictionInput,
-    PredictionOutput,
+    # PreprocessingOutput,
+    # UploadResponse,
+    # PredictionInput,
+    # PredictionOutput,
     PredictEDFResponse
 )
+
 from src.features.feature_engineering import FeatureEngineering
 from src.utils.logger import get_logger
 
@@ -42,7 +42,10 @@ AVAILABLE_CONFIGS = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
 DEFAULT_CONFIG = "eeg_emg_eog"
 
 
-def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> Tuple[mne.Epochs, bool]:
+def preprocess_edf_for_api(
+        file_path: str,
+        hypno_path: Optional[str] = None
+) -> Tuple[mne.Epochs, bool]:
     logger.info(f"Processing EDF file for API: {file_path}")
 
     exclude_ch = ["Event marker", "Marker", "Status"]
@@ -54,7 +57,10 @@ def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> 
             infer_types=True,
         )
 
-    logger.info(f"Data loaded. SFreq: {raw.info['sfreq']:.2f} Hz. Channels: {len(raw.ch_names)}")
+    logger.info(
+        f"Data loaded. SFreq: {raw.info['sfreq']:.2f} Hz. "
+        f"Channels: {len(raw.ch_names)}"
+    )
 
     eog_channel_name = "horizontal"
     if eog_channel_name in raw.ch_names:
@@ -78,7 +84,9 @@ def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> 
 
     current_sfreq = raw.info["sfreq"]
     if current_sfreq != TARGET_SFREQ:
-        logger.info(f"Resampling from {current_sfreq:.2f} Hz to {TARGET_SFREQ:.2f} Hz")
+        logger.info(
+            f"Resampling from {current_sfreq:.2f} Hz to {TARGET_SFREQ:.2f} Hz"
+        )
         raw.resample(sfreq=TARGET_SFREQ, npad="auto", verbose=False)
 
     logger.info("Applying filters using existing preprocessing functions...")
@@ -88,7 +96,9 @@ def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> 
 
     nyquist = TARGET_SFREQ / 2.0
     if NOTCH_FREQ < nyquist:
-        logger.info(f"Applying {NOTCH_FREQ} Hz notch filter using existing function")
+        logger.info(
+            f"Applying {NOTCH_FREQ} Hz notch filter using existing function"
+        )
         if NOTCH_FREQ > EEG_BANDPASS[0] and NOTCH_FREQ < EEG_BANDPASS[1]:
             raw = notch_filter(raw, NOTCH_FREQ, "eeg")
         if NOTCH_FREQ > EOG_BANDPASS[0] and NOTCH_FREQ < EOG_BANDPASS[1]:
@@ -126,12 +136,20 @@ def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> 
                         reject_by_annotation=True,
                         verbose=False,
                     )
-                    logger.info(f"Created {len(epochs)} labeled epochs from annotations")
+                    logger.info(
+                        f"Created {len(epochs)} labeled "
+                        "epochs from annotations"
+                    )
                 else:
-                    logger.warning("No valid event mapping found, falling back to fixed-length epochs")
+                    logger.warning(
+                        "No valid event mapping found, falling back"
+                        " to fixed-length epochs"
+                    )
                     annotations_loaded = False
             else:
-                logger.warning("No events found, falling back to fixed-length epochs")
+                logger.warning(
+                    "No events found, falling back to fixed-length epochs"
+                )
                 annotations_loaded = False
         except Exception as e:
             logger.error(f"Error creating epochs from annotations: {e}")
@@ -151,7 +169,9 @@ def preprocess_edf_for_api(file_path: str, hypno_path: Optional[str] = None) -> 
     return epochs, annotations_loaded
 
 
-def extract_features_for_config(epochs: mne.Epochs, config: str) -> Tuple[np.ndarray, List[str]]:
+def extract_features_for_config(
+        epochs: mne.Epochs, config: str
+) -> Tuple[np.ndarray, List[str]]:
     modality_mapping = {
         "eeg": ["eeg"],
         "eeg_emg": ["eeg", "emg"],
@@ -206,7 +226,9 @@ def extract_features_for_config(epochs: mne.Epochs, config: str) -> Tuple[np.nda
     )
 
     feature_engineer = FeatureEngineering()
-    X_features, _, feature_names = feature_engineer._extract_features(epochs_for_extraction)
+    X_features, _, feature_names = feature_engineer._extract_features(
+        epochs_for_extraction
+    )
 
     return X_features, feature_names
 
@@ -225,7 +247,8 @@ def load_model(config: str) -> SklearnPipeline:
         raise RuntimeError(f"Failed to load model: {e}")
 
 
-def evaluate_model_on_data(model, X_test, y_test, config: str, request: Request = None) -> Dict[str, Any]:
+def evaluate_model_on_data(model, X_test, y_test, config: str,
+                           request: Request = None) -> Dict[str, Any]:
     from sklearn.metrics import (
         accuracy_score, precision_recall_fscore_support,
         confusion_matrix, roc_auc_score
@@ -241,15 +264,19 @@ def evaluate_model_on_data(model, X_test, y_test, config: str, request: Request 
     macro_precision = precision.mean()
     macro_recall = recall.mean()
 
-    weighted_precision, weighted_recall, weighted_f1, _ = precision_recall_fscore_support(
-        y_test, predictions, average='weighted', zero_division=0
+    weighted_precision, weighted_recall, weighted_f1, _ = (
+        precision_recall_fscore_support(
+            y_test, predictions, average='weighted', zero_division=0
+        )
     )
 
     unique_labels = np.unique(np.concatenate([y_test, predictions]))
 
     if request and hasattr(request.app.state, 'label_mapping'):
         label_mapping = request.app.state.label_mapping
-        class_names = [label_mapping.get(label, f"Class_{label}") for label in unique_labels]
+        class_names = [
+            label_mapping.get(label,
+                              f"Class_{label}") for label in unique_labels]
     else:
         class_names = [f"Class_{label}" for label in unique_labels]
 
@@ -281,7 +308,9 @@ def evaluate_model_on_data(model, X_test, y_test, config: str, request: Request 
     test_distribution = {}
     for label, count in zip(unique_test, counts_test):
         if request and hasattr(request.app.state, 'label_mapping'):
-            label_name = request.app.state.label_mapping.get(label, f"Class_{label}")
+            label_name = request.app.state.label_mapping.get(
+                label, f"Class_{label}"
+            )
         else:
             label_name = f"Class_{label}"
         test_distribution[label_name] = int(count)
@@ -308,7 +337,8 @@ def evaluate_model_on_data(model, X_test, y_test, config: str, request: Request 
 
 
 def load_pretrained_metrics(config: str) -> Dict[str, Any]:
-    possible_splits_dirs = ["splits-data", "data/splits", "processed-data", MODELS_DIR, "results"]
+    possible_splits_dirs = ["splits-data", "data/splits",
+                            "processed-data", MODELS_DIR, "results"]
 
     train_metrics = None
     val_metrics = None
@@ -316,13 +346,17 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
 
     for splits_dir in possible_splits_dirs:
         try:
-            train_path = os.path.join(splits_dir, f"train_{config}_featured.npz")
+            train_path = os.path.join(
+                splits_dir, f"train_{config}_featured.npz"
+            )
             if os.path.exists(train_path):
                 train_data = np.load(train_path, allow_pickle=True)
                 model = load_model(config)
                 X_train = train_data['X_train']
                 y_train = train_data['y_train']
-                train_metrics = evaluate_model_on_data(model, X_train, y_train, config)
+                train_metrics = evaluate_model_on_data(
+                    model, X_train, y_train, config
+                )
                 train_metrics["data_source"] = train_path
 
             val_path = os.path.join(splits_dir, f"val_{config}_featured.npz")
@@ -331,7 +365,9 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
                 model = load_model(config)
                 X_val = val_data['X_val']
                 y_val = val_data['y_val']
-                val_metrics = evaluate_model_on_data(model, X_val, y_val, config)
+                val_metrics = evaluate_model_on_data(
+                    model, X_val, y_val, config
+                )
                 val_metrics["data_source"] = val_path
 
             test_path = os.path.join(splits_dir, f"test_{config}_featured.npz")
@@ -340,7 +376,9 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
                 model = load_model(config)
                 X_test = test_data['X_test']
                 y_test = test_data['y_test']
-                test_metrics = evaluate_model_on_data(model, X_test, y_test, config)
+                test_metrics = evaluate_model_on_data(
+                    model, X_test, y_test, config
+                )
                 test_metrics["data_source"] = test_path
 
             if train_metrics or val_metrics or test_metrics:
@@ -360,7 +398,9 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
 @router.post("/predict-edf", response_model=PredictEDFResponse)
 async def predict_edf_file(
     edf_file: UploadFile = File(..., description="EDF sleep recording file"),
-    hypno_file: Optional[UploadFile] = File(None, description="Optional hypnogram file for better epoch creation"),
+    hypno_file: Optional[UploadFile] = File(
+        None, description="Optional hypnogram file for better epoch creation"
+    ),
     config: str = DEFAULT_CONFIG,
     request: Request = None
 ):
@@ -396,7 +436,10 @@ async def predict_edf_file(
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid configuration '{config}'. Available: {AVAILABLE_CONFIGS}"
+            detail=(
+                f"Invalid configuration '{config}'. "
+                + f"Available: {AVAILABLE_CONFIGS}"
+            )
         )
 
     if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
@@ -409,10 +452,16 @@ async def predict_edf_file(
     if file_size_mb > 500:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large ({file_size_mb:.1f}MB). Maximum size is 500MB."
+            detail=(
+                f"File too large ({file_size_mb:.1f}MB). "
+                + "Maximum size is 500MB."
+            )
         )
 
-    logger.info(f"Starting automated prediction pipeline for {edf_file.filename} using {config} configuration")
+    logger.info(
+        f"Starting automated prediction pipeline for {edf_file.filename}"
+        f" using {config} configuration"
+    )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         edf_path = os.path.join(temp_dir, edf_file.filename)
@@ -431,23 +480,43 @@ async def predict_edf_file(
             logger.info(f"Hypnogram file provided: {hypno_file.filename}")
 
         try:
-            logger.info("Step 1/4: Preprocessing EDF data using existing pipeline...")
-            epochs, annotations_loaded = preprocess_edf_for_api(edf_path, hypno_path)
-            logger.info(f"Preprocessing complete. Created {len(epochs)} epochs of {EPOCH_DURATION}s each")
+            logger.info(
+                "Step 1/4: Preprocessing EDF data using existing pipeline..."
+            )
+            epochs, annotations_loaded = preprocess_edf_for_api(
+                edf_path, hypno_path
+            )
+            logger.info(
+                f"Preprocessing complete. Created {len(epochs)} epochs"
+                f" of {EPOCH_DURATION}s each"
+            )
 
-            logger.info(f"Step 2/4: Extracting features for {config} configuration...")
-            features, feature_names = extract_features_for_config(epochs, config)
-            logger.info(f"Feature extraction complete. Extracted {features.shape[1]} features per epoch")
+            logger.info(
+                f"Step 2/4: Extracting features for {config} configuration..."
+            )
+            features, feature_names = extract_features_for_config(
+                epochs, config
+            )
+            logger.info(
+                f"Feature extraction complete. Extracted "
+                f" {features.shape[1]} features per epoch"
+            )
 
-            logger.info("Step 3/4: Loading trained model and making predictions...")
+            logger.info(
+                "Step 3/4: Loading trained model and making predictions..."
+            )
             model = load_model(config)
             predictions = model.predict(features)
             logger.info(f"Predictions complete for {len(predictions)} epochs")
 
-            logger.info("Step 4/4: Generating confidence scores and formatting results...")
+            logger.info(
+                "Step 4/4: Generating confidence scores"
+                " and formatting results..."
+            )
             probabilities_per_segment = None
             if hasattr(model, 'predict_proba'):
-                probabilities_per_segment = model.predict_proba(features).tolist()
+                probabilities_per_segment = model.predict_proba(
+                    features).tolist()
 
             if request and hasattr(request.app.state, 'label_mapping'):
                 label_mapping = request.app.state.label_mapping
@@ -460,19 +529,32 @@ async def predict_edf_file(
                 prediction_labels = [f"Class_{pred}" for pred in predictions]
                 class_labels_legend = None
 
-            unique_stages, counts = np.unique(prediction_labels, return_counts=True)
+            unique_stages, counts = np.unique(
+                prediction_labels, return_counts=True
+            )
             stage_distribution = dict(zip(unique_stages, counts.tolist()))
             total_time_hours = len(predictions) * EPOCH_DURATION / 3600
 
             current_file_metrics = None
-            if annotations_loaded and hasattr(epochs, 'events') and epochs.events is not None:
-                logger.info("Ground truth available - calculating performance metrics on current file...")
+            if annotations_loaded and hasattr(epochs, 'events') and \
+                    epochs.events is not None:
+                logger.info(
+                    "Ground truth available - calculating performance"
+                    " metrics on current file..."
+                )
                 try:
                     ground_truth = epochs.events[:, -1]
-                    current_file_metrics = evaluate_model_on_data(model, features, ground_truth, config, request)
-                    current_file_metrics["note"] = "Performance metrics calculated on the uploaded file with ground truth annotations"
+                    current_file_metrics = evaluate_model_on_data(
+                        model, features, ground_truth, config, request
+                    )
+                    current_file_metrics["note"] = (
+                        "Performance metrics calculated on the uploaded"
+                        + " file with ground truth annotations"
+                    )
                 except Exception as e:
-                    logger.warning(f"Could not calculate metrics on current file: {e}")
+                    logger.warning(
+                        f"Could not calculate metrics on current file: {e}"
+                    )
 
             logger.info("Complete pipeline finished successfully!")
             logger.info(f"Sleep stage distribution: {stage_distribution}")
@@ -523,7 +605,10 @@ async def get_all_performance_metrics(config: str, request: Request = None):
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid configuration '{config}'. Available: {AVAILABLE_CONFIGS}"
+            detail=(
+                f"Invalid configuration '{config}'."
+                + f" Available: {AVAILABLE_CONFIGS}"
+            )
         )
 
     model_path = os.path.join(MODELS_DIR, f"svm_model_{config}.joblib")
@@ -537,26 +622,40 @@ async def get_all_performance_metrics(config: str, request: Request = None):
         pretrained_metrics = load_pretrained_metrics(config)
 
         overfitting_analysis = {}
-        if (pretrained_metrics["training_metrics"] and
-            pretrained_metrics["test_metrics"]):
+        if pretrained_metrics["training_metrics"] and \
+                pretrained_metrics["test_metrics"]:
 
-            train_acc = pretrained_metrics["training_metrics"]["overall_metrics"]["accuracy"]
-            test_acc = pretrained_metrics["test_metrics"]["overall_metrics"]["accuracy"]
-            train_f1 = pretrained_metrics["training_metrics"]["overall_metrics"]["macro_f1_score"]
-            test_f1 = pretrained_metrics["test_metrics"]["overall_metrics"]["macro_f1_score"]
+            train_acc = pretrained_metrics["training_metrics"][
+                "overall_metrics"]["accuracy"]
+            test_acc = pretrained_metrics["test_metrics"]["overall_metrics"][
+                "accuracy"
+            ]
+            train_f1 = pretrained_metrics["training_metrics"][
+                "overall_metrics"]["macro_f1_score"]
+            test_f1 = pretrained_metrics["test_metrics"]["overall_metrics"][
+                "macro_f1_score"
+            ]
 
             overfitting_analysis = {
                 "accuracy_drop": round(train_acc - test_acc, 4),
                 "f1_drop": round(train_f1 - test_f1, 4),
-                "overfitting_severity": "Low" if (train_acc - test_acc) < 0.05 else
-                                       "Moderate" if (train_acc - test_acc) < 0.15 else "High",
-                "generalization_quality": "Excellent" if (train_acc - test_acc) < 0.03 else
-                                        "Good" if (train_acc - test_acc) < 0.08 else
-                                        "Fair" if (train_acc - test_acc) < 0.15 else "Poor",
+                "overfitting_severity": (
+                    "Low" if (train_acc - test_acc) < 0.05
+                    else "Moderate" if (train_acc - test_acc) < 0.15
+                    else "High"
+                ),
+                "generalization_quality": (
+                    "Excellent" if (train_acc - test_acc) < 0.03
+                    else "Good" if (train_acc - test_acc) < 0.08
+                    else "Fair" if (train_acc - test_acc) < 0.15
+                    else "Poor"
+                ),
                 "vs_random_guessing": {
                     "random_accuracy": 0.20,
                     "test_accuracy": test_acc,
-                    "improvement_over_random": round((test_acc - 0.20) / 0.20 * 100, 1),
+                    "improvement_over_random": round(
+                        (test_acc - 0.20) / 0.20 * 100, 1
+                    ),
                     "significantly_above_random": test_acc > 0.35
                 }
             }
@@ -564,23 +663,51 @@ async def get_all_performance_metrics(config: str, request: Request = None):
         summary = {}
         if pretrained_metrics["training_metrics"]:
             summary["training"] = {
-                "accuracy": pretrained_metrics["training_metrics"]["overall_metrics"]["accuracy"],
-                "f1_score": pretrained_metrics["training_metrics"]["overall_metrics"]["macro_f1_score"],
-                "dataset_size": pretrained_metrics["training_metrics"]["dataset_size"]
+                "accuracy": (
+                    pretrained_metrics["training_metrics"]["overall_metrics"][
+                        "accuracy"
+                    ]
+                ),
+                "f1_score": (
+                    pretrained_metrics["training_metrics"]["overall_metrics"][
+                        "macro_f1_score"
+                    ]
+                ),
+                "dataset_size": (
+                    pretrained_metrics["training_metrics"]["dataset_size"]
+                )
             }
 
         if pretrained_metrics["validation_metrics"]:
             summary["validation"] = {
-                "accuracy": pretrained_metrics["validation_metrics"]["overall_metrics"]["accuracy"],
-                "f1_score": pretrained_metrics["validation_metrics"]["overall_metrics"]["macro_f1_score"],
-                "dataset_size": pretrained_metrics["validation_metrics"]["dataset_size"]
+                "accuracy": (
+                    pretrained_metrics["validation_metrics"][
+                        "overall_metrics"]["accuracy"]
+                ),
+                "f1_score": (
+                    pretrained_metrics["validation_metrics"][
+                        "overall_metrics"]["macro_f1_score"]
+                ),
+                "dataset_size": (
+                    pretrained_metrics["validation_metrics"]["dataset_size"]
+                )
             }
 
         if pretrained_metrics["test_metrics"]:
             summary["test"] = {
-                "accuracy": pretrained_metrics["test_metrics"]["overall_metrics"]["accuracy"],
-                "f1_score": pretrained_metrics["test_metrics"]["overall_metrics"]["macro_f1_score"],
-                "dataset_size": pretrained_metrics["test_metrics"]["dataset_size"]
+                "accuracy": (
+                    pretrained_metrics["test_metrics"]["overall_metrics"][
+                        "accuracy"
+                    ]
+                ),
+                "f1_score": (
+                    pretrained_metrics["test_metrics"]["overall_metrics"][
+                        "macro_f1_score"
+                    ]
+                ),
+                "dataset_size": (
+                    pretrained_metrics["test_metrics"]["dataset_size"]
+                )
             }
 
         return {
@@ -593,20 +720,43 @@ async def get_all_performance_metrics(config: str, request: Request = None):
                 "test": pretrained_metrics["test_metrics"]
             },
             "model_status": {
-                "training_data_available": pretrained_metrics["training_metrics"] is not None,
-                "validation_data_available": pretrained_metrics["validation_metrics"] is not None,
-                "test_data_available": pretrained_metrics["test_metrics"] is not None,
+                "training_data_available": (
+                    pretrained_metrics["training_metrics"] is not None
+                ),
+                "validation_data_available": (
+                    pretrained_metrics["validation_metrics"] is not None
+                ),
+                "test_data_available": (
+                    pretrained_metrics["test_metrics"] is not None
+                ),
                 "performance_analysis_complete": all([
                     pretrained_metrics["training_metrics"],
                     pretrained_metrics["test_metrics"]
                 ])
             },
             "recommendations": {
-                "model_quality": "Production ready" if overfitting_analysis.get("generalization_quality") in ["Excellent", "Good"] else "Needs improvement",
-                "above_random_performance": overfitting_analysis.get("vs_random_guessing", {}).get("significantly_above_random", False),
+                "model_quality": (
+                    "Production ready"
+                    if overfitting_analysis.get("generalization_quality")
+                    in ["Excellent", "Good"]
+                    else "Needs improvement"
+                ),
+                "above_random_performance": (
+                    overfitting_analysis.get("vs_random_guessing", {})
+                    .get("significantly_above_random", False)
+                ),
                 "next_steps": [
-                    "Model performs well on unseen data" if overfitting_analysis.get("overfitting_severity") == "Low" else "Consider regularization or more training data",
-                    "Ready for deployment" if summary.get("test", {}).get("accuracy", 0) > 0.8 else "Consider model improvements"
+                    ("Model performs well on unseen data"
+                     if overfitting_analysis.get("overfitting_severity")
+                     == "Low"
+                     else (
+                        "Consider regularization or more training data"
+                     )
+                     ),
+                    ("Ready for deployment"
+                     if summary.get("test", {}).get("accuracy", 0) > 0.8
+                     else "Consider model improvements"
+                     )
                 ]
             }
         }
@@ -649,11 +799,17 @@ async def pipeline_health_check():
     if available_count == 0:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No trained models available. Please ensure model files are in the 'results/' directory."
+            detail=(
+                "No trained models available. Please ensure model files are"
+                + " in the 'results/' directory."
+            )
         )
 
     return ResponseMessage(
-        message=f"ML Pipeline is healthy! {available_count}/{len(AVAILABLE_CONFIGS)} models ready: {available_models}"
+        message=(
+            f"ML Pipeline is healthy! {available_count}/"
+            f"{len(AVAILABLE_CONFIGS)} models ready: {available_models}"
+        )
     )
 
 
@@ -665,8 +821,10 @@ async def test_model_prediction(
     """
     Test the ML pipeline with synthetic data
 
-    This endpoint lets you test if a model configuration works without uploading real EDF files.
-    It generates synthetic features and returns a prediction to verify the model is working.
+    This endpoint lets you test if a model configuration works without
+    uploading real EDF files.
+    It generates synthetic features and returns a prediction to verify the
+    model is working.
 
     Useful for:
     - Testing if models are loaded correctly
@@ -676,17 +834,20 @@ async def test_model_prediction(
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid configuration '{config}'. Available: {AVAILABLE_CONFIGS}"
+            detail=(
+                f"Invalid configuration '{config}'. "
+                f"Available: {AVAILABLE_CONFIGS}"
+            )
         )
 
     try:
         model = load_model(config)
 
         feature_counts = {
-            "eeg": 25,
+            "eeg": 16,
             "eeg_emg": 30,
             "eeg_eog": 35,
-            "eeg_emg_eog": 40
+            "eeg_emg_eog": 19
         }
 
         n_features = feature_counts.get(config, 30)
@@ -709,7 +870,9 @@ async def test_model_prediction(
 
         if request and hasattr(request.app.state, 'label_mapping'):
             label_mapping = request.app.state.label_mapping
-            prediction_label = label_mapping.get(prediction_id, f"Unknown_{prediction_id}")
+            prediction_label = label_mapping.get(
+                prediction_id, f"Unknown_{prediction_id}"
+            )
         else:
             prediction_label = f"Class_{prediction_id}"
 
@@ -724,13 +887,18 @@ async def test_model_prediction(
                 "confidence_score": confidence_score,
                 "class_probabilities": class_probabilities
             },
-            "note": "This was a test with synthetic data. Upload real EDF files using /predict-edf for actual predictions."
+            "note": (
+                "This was a test with synthetic data. Upload real EDF"
+                + " files using /predict-edf for actual predictions."
+            )
         }
 
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Model file not found for configuration '{config}': {str(e)}"
+            detail=(
+                f"Model file not found for configuration '{config}': {str(e)}"
+            )
         )
     except Exception as e:
         logger.error(f"Error during model testing: {e}")
@@ -743,7 +911,9 @@ async def test_model_prediction(
 @router.post("/predict-edf-with-metrics", response_model=Dict[str, Any])
 async def predict_edf_with_comprehensive_metrics(
     edf_file: UploadFile = File(..., description="EDF sleep recording file"),
-    hypno_file: UploadFile = File(..., description="Hypnogram file for ground truth evaluation"),
+    hypno_file: UploadFile = File(
+        ..., description="Hypnogram file for ground truth evaluation"
+    ),
     config: str = DEFAULT_CONFIG,
     request: Request = None
 ):
@@ -756,13 +926,17 @@ async def predict_edf_with_comprehensive_metrics(
     3. Comparison with pre-trained model performance
     4. Model confidence and reliability analysis
 
-    Perfect for: Comprehensive analysis of how well the model performs on your specific data
+    Perfect for: Comprehensive analysis of how well the model performs on your
+    specific data.
     Requires: Both EDF file AND hypnogram for ground truth comparison
     """
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid configuration '{config}'. Available: {AVAILABLE_CONFIGS}"
+            detail=(
+                f"Invalid configuration '{config}'. "
+                + f"Available: {AVAILABLE_CONFIGS}"
+            )
         )
 
     if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
@@ -774,10 +948,15 @@ async def predict_edf_with_comprehensive_metrics(
     if not hypno_file or not hypno_file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hypnogram file is required for comprehensive metrics analysis"
+            detail=(
+                "Hypnogram file is required for comprehensive metrics analysis"
+            )
         )
 
-    logger.info(f"Starting comprehensive prediction + metrics analysis for {edf_file.filename}")
+    logger.info(
+        f"Starting comprehensive prediction + metrics "
+        f"analysis for {edf_file.filename}"
+    )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         edf_path = os.path.join(temp_dir, edf_file.filename)
@@ -792,17 +971,29 @@ async def predict_edf_with_comprehensive_metrics(
             f.write(content)
 
         try:
-            logger.info("Step 1/5: Processing uploaded EDF file using existing pipeline...")
-            epochs, annotations_loaded = preprocess_edf_for_api(edf_path, hypno_path)
+            logger.info(
+                "Step 1/5: Processing uploaded EDF file"
+                " using existing pipeline..."
+            )
+            epochs, annotations_loaded = preprocess_edf_for_api(
+                edf_path, hypno_path
+            )
 
             if not annotations_loaded:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Could not load annotations from hypnogram file - required for metrics analysis"
+                    detail=(
+                        "Could not load annotations from hypnogram file "
+                        "- required for metrics analysis"
+                    )
                 )
 
-            logger.info("Step 2/5: Extracting features and ground truth labels...")
-            features, feature_names = extract_features_for_config(epochs, config)
+            logger.info(
+                "Step 2/5: Extracting features and ground truth labels..."
+            )
+            features, feature_names = extract_features_for_config(
+                epochs, config
+            )
             ground_truth = epochs.events[:, -1]
 
             logger.info("Step 3/5: Making predictions...")
@@ -812,41 +1003,63 @@ async def predict_edf_with_comprehensive_metrics(
             if hasattr(model, 'predict_proba'):
                 probabilities = model.predict_proba(features)
 
-            logger.info("Step 4/5: Calculating performance metrics on your file...")
-            current_file_metrics = evaluate_model_on_data(model, features, ground_truth, config, request)
+            logger.info(
+                "Step 4/5: Calculating performance metrics on your file..."
+            )
+            current_file_metrics = evaluate_model_on_data(
+                model, features, ground_truth, config, request
+            )
 
-            logger.info("Step 5/5: Loading pre-trained metrics for comparison...")
+            logger.info(
+                "Step 5/5: Loading pre-trained metrics for comparison..."
+            )
             pretrained_metrics = load_pretrained_metrics(config)
 
             if request and hasattr(request.app.state, 'label_mapping'):
                 label_mapping = request.app.state.label_mapping
-                prediction_labels = [label_mapping.get(pred, f"Unknown_{pred}") for pred in predictions]
-                ground_truth_labels = [label_mapping.get(gt, f"Unknown_{gt}") for gt in ground_truth]
+                prediction_labels = [
+                    label_mapping.get(pred, f"Unknown_{pred}")
+                    for pred in predictions
+                ]
+                ground_truth_labels = [
+                    label_mapping.get(gt, f"Unknown_{gt}")
+                    for gt in ground_truth
+                ]
             else:
                 prediction_labels = [f"Class_{pred}" for pred in predictions]
                 ground_truth_labels = [f"Class_{gt}" for gt in ground_truth]
 
             comparison_analysis = {}
             if pretrained_metrics["test_metrics"]:
-                test_acc = pretrained_metrics["test_metrics"]["overall_metrics"]["accuracy"]
-                test_f1 = pretrained_metrics["test_metrics"]["overall_metrics"]["macro_f1_score"]
-                current_acc = current_file_metrics["overall_metrics"]["accuracy"]
-                current_f1 = current_file_metrics["overall_metrics"]["macro_f1_score"]
+                test_acc = pretrained_metrics["test_metrics"][
+                    "overall_metrics"]["accuracy"]
+                test_f1 = pretrained_metrics["test_metrics"][
+                    "overall_metrics"]["macro_f1_score"]
+                current_acc = current_file_metrics["overall_metrics"][
+                    "accuracy"]
+                current_f1 = current_file_metrics["overall_metrics"][
+                    "macro_f1_score"]
 
                 comparison_analysis = {
                     "accuracy_vs_test_set": {
                         "your_file": round(current_acc, 4),
                         "original_test_set": round(test_acc, 4),
                         "difference": round(current_acc - test_acc, 4),
-                        "performance_category": "Better" if current_acc > test_acc else
-                                             "Similar" if abs(current_acc - test_acc) < 0.05 else "Worse"
+                        "performance_category": (
+                            "Better" if current_acc > test_acc
+                            else "Similar"
+                            if abs(current_acc - test_acc) < 0.05 else "Worse"
+                        )
                     },
                     "f1_score_vs_test_set": {
                         "your_file": round(current_f1, 4),
                         "original_test_set": round(test_f1, 4),
                         "difference": round(current_f1 - test_f1, 4),
-                        "performance_category": "Better" if current_f1 > test_f1 else
-                                             "Similar" if abs(current_f1 - test_f1) < 0.05 else "Worse"
+                        "performance_category": (
+                            "Better" if current_f1 > test_f1
+                            else "Similar"
+                            if abs(current_f1 - test_f1) < 0.05 else "Worse"
+                        )
                     }
                 }
 
@@ -858,21 +1071,33 @@ async def predict_edf_with_comprehensive_metrics(
                     "median_confidence": float(np.median(max_probs)),
                     "min_confidence": float(np.min(max_probs)),
                     "max_confidence": float(np.max(max_probs)),
-                    "high_confidence_predictions": int(np.sum(max_probs > 0.8)),
+                    "high_confidence_predictions": int(
+                        np.sum(max_probs > 0.8)
+                    ),
                     "low_confidence_predictions": int(np.sum(max_probs < 0.5)),
                     "confidence_distribution": {
                         "very_high_0.9+": int(np.sum(max_probs >= 0.9)),
-                        "high_0.8-0.9": int(np.sum((max_probs >= 0.8) & (max_probs < 0.9))),
-                        "medium_0.6-0.8": int(np.sum((max_probs >= 0.6) & (max_probs < 0.8))),
-                        "low_0.4-0.6": int(np.sum((max_probs >= 0.4) & (max_probs < 0.6))),
+                        "high_0.8-0.9": int(
+                            np.sum((max_probs >= 0.8) & (max_probs < 0.9))
+                        ),
+                        "medium_0.6-0.8": int(
+                            np.sum((max_probs >= 0.6) & (max_probs < 0.8))
+                        ),
+                        "low_0.4-0.6": int(
+                            np.sum((max_probs >= 0.4) & (max_probs < 0.6))
+                        ),
                         "very_low_<0.4": int(np.sum(max_probs < 0.4))
                     }
                 }
 
-            unique_pred, counts_pred = np.unique(prediction_labels, return_counts=True)
+            unique_pred, counts_pred = np.unique(
+                prediction_labels, return_counts=True
+            )
             pred_distribution = dict(zip(unique_pred, counts_pred.tolist()))
 
-            unique_true, counts_true = np.unique(ground_truth_labels, return_counts=True)
+            unique_true, counts_true = np.unique(
+                ground_truth_labels, return_counts=True
+            )
             true_distribution = dict(zip(unique_true, counts_true.tolist()))
 
             total_time_hours = len(predictions) * EPOCH_DURATION / 3600
@@ -880,10 +1105,21 @@ async def predict_edf_with_comprehensive_metrics(
                 "total_recording_time_hours": round(total_time_hours, 2),
                 "total_epochs": len(predictions),
                 "epochs_with_annotations": len(ground_truth),
-                "annotation_completeness": round(len(ground_truth) / len(predictions), 4),
-                "sleep_efficiency": round(1 - (pred_distribution.get("Wake", 0) / len(predictions)), 4) if pred_distribution else None
+                "annotation_completeness": (
+                    round(len(ground_truth) / len(predictions), 4)
+                ),
+                "sleep_efficiency": (
+                    round(1 - (
+                        pred_distribution.get("Wake", 0) / len(predictions)
+                    ), 4) if pred_distribution else None
+                )
             }
-
+            term1 = current_file_metrics['overall_metrics']['accuracy']
+            term2 = confidence_analysis.get('mean_confidence', 0)
+            term3 = (
+                comparison_analysis.get('accuracy_vs_test_set', {})
+                .get('performance_category', 'Unknown')
+            )
             return {
                 "model_configuration": config,
                 "file_info": {
@@ -896,12 +1132,19 @@ async def predict_edf_with_comprehensive_metrics(
                     "ground_truth_stages": ground_truth_labels,
                     "prediction_ids": predictions.tolist(),
                     "ground_truth_ids": ground_truth.tolist(),
-                    "probabilities_per_epoch": probabilities.tolist() if probabilities is not None else None
+                    "probabilities_per_epoch": (
+                        probabilities.tolist()
+                        if probabilities is not None else None
+                    )
                 },
                 "current_file_performance": current_file_metrics,
                 "pretrained_model_performance": {
-                    "training_metrics": pretrained_metrics["training_metrics"],
-                    "validation_metrics": pretrained_metrics["validation_metrics"],
+                    "training_metrics": pretrained_metrics[
+                        "training_metrics"
+                    ],
+                    "validation_metrics": pretrained_metrics[
+                        "validation_metrics"
+                    ],
                     "test_metrics": pretrained_metrics["test_metrics"]
                 },
                 "performance_comparison": comparison_analysis,
@@ -911,26 +1154,54 @@ async def predict_edf_with_comprehensive_metrics(
                     "actual_distribution": true_distribution,
                     "stage_agreement_summary": {
                         stage: {
-                            "predicted_count": pred_distribution.get(stage, 0),
-                            "actual_count": true_distribution.get(stage, 0),
-                            "difference": pred_distribution.get(stage, 0) - true_distribution.get(stage, 0)
+                            "predicted_count": pred_distribution.get(
+                                stage, 0
+                            ),
+                            "actual_count": true_distribution.get(
+                                stage, 0
+                            ),
+                            "difference": (
+                                pred_distribution.get(stage, 0) -
+                                true_distribution.get(stage, 0)
+                            )
                         }
-                        for stage in set(list(pred_distribution.keys()) + list(true_distribution.keys()))
+                        for stage in set(
+                            list(pred_distribution.keys()) +
+                            list(true_distribution.keys())
+                        )
                     }
                 },
                 "recommendations": {
-                    "model_reliability": "High" if current_file_metrics["overall_metrics"]["accuracy"] > 0.8 else
-                                      "Medium" if current_file_metrics["overall_metrics"]["accuracy"] > 0.6 else "Low",
-                    "confidence_level": "High" if confidence_analysis.get("mean_confidence", 0) > 0.8 else
-                                     "Medium" if confidence_analysis.get("mean_confidence", 0) > 0.6 else "Low",
-                    "clinical_usability": "Suitable for clinical review" if (
-                        current_file_metrics["overall_metrics"]["accuracy"] > 0.75 and
-                        confidence_analysis.get("mean_confidence", 0) > 0.7
-                    ) else "Requires manual review",
+                    "model_reliability": (
+                        "High" if current_file_metrics[
+                            "overall_metrics"
+                        ]["accuracy"] > 0.8 else
+                        "Medium" if current_file_metrics[
+                            "overall_metrics"
+                        ]["accuracy"] > 0.6 else "Low"
+                    ),
+                    "confidence_level": (
+                        "High" if confidence_analysis.get(
+                            "mean_confidence", 0
+                        ) > 0.8 else
+                        "Medium" if confidence_analysis.get(
+                            "mean_confidence", 0
+                        ) > 0.6 else "Low"
+                    ),
+                    "clinical_usability": (
+                        "Suitable for clinical review" if (
+                            current_file_metrics[
+                                "overall_metrics"
+                            ]["accuracy"] > 0.75 and
+                            confidence_analysis.get(
+                                "mean_confidence", 0
+                            ) > 0.7
+                        ) else "Requires manual review"
+                    ),
                     "notes": [
-                        f"Model achieved {current_file_metrics['overall_metrics']['accuracy']:.1%} accuracy on your file",
-                        f"Average prediction confidence: {confidence_analysis.get('mean_confidence', 0):.1%}",
-                        f"Performance vs test set: {comparison_analysis.get('accuracy_vs_test_set', {}).get('performance_category', 'Unknown')}"
+                        f"Model achieved {term1:.1%} accuracy on your file",
+                        f"Average prediction confidence: {term2:.1%}",
+                        f"Performance vs test set: {term3}"
                     ]
                 }
             }

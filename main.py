@@ -1,6 +1,6 @@
-# main.py
 """Main application file for the FastAPI app."""
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import os
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,7 @@ from src.endpoints.patient import router as patient_router
 from src.endpoints.pipeline import router as pipeline_router
 from src.schemas import ResponseMessage
 
-# Configuration
+# configuration
 LABEL_TO_NAME_MAPPING: dict[int, str] = {
     1: "Wake",
     2: "N1",
@@ -19,6 +19,32 @@ LABEL_TO_NAME_MAPPING: dict[int, str] = {
     0: "Unknown/Movement"
 }
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize application state."""
+    print("Starting Sleep Stage Prediction API...")
+    app.state.label_mapping = LABEL_TO_NAME_MAPPING
+    models_dir = "results"
+    if not os.path.exists(models_dir):
+        print(f"WARNING: Models directory '{models_dir}' not found.")
+        print("Models will be loaded dynamically by pipeline endpoints.")
+    else:
+        available_models = []
+        for config in ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]:
+            model_path = os.path.join(models_dir, f"svm_model_{config}.joblib")
+            if os.path.exists(model_path):
+                available_models.append(config)
+        print(
+            f"Found {len(available_models)} trained models: {available_models}"
+        )
+    print("Application startup complete!")
+
+    yield
+
+    print("Shutting down Sleep Stage Prediction API...")
+
+
 app = FastAPI(
     title="Sleep Stage Prediction API",
     description=(
@@ -27,34 +53,8 @@ app = FastAPI(
         "Supports EDF file uploads for automatic preprocessing and prediction."
     ),
     version="1.0.3",
+    lifespan=lifespan
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize application state."""
-    print("Starting Sleep Stage Prediction API...")
-
-    app.state.label_mapping = LABEL_TO_NAME_MAPPING
-
-    models_dir = "results"
-    if not os.path.exists(models_dir):
-        print(f"WARNING: Models directory '{models_dir}' not found.")
-        print("Models will be loaded dynamically by pipeline endpoints.")
-    else:
-
-        available_models = []
-        for config in ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]:
-            model_path = os.path.join(models_dir, f"svm_model_{config}.joblib")
-            if os.path.exists(model_path):
-                available_models.append(config)
-
-        print(
-            f"Found {len(available_models)} trained models: "
-            f"{available_models}"
-        )
-
-    print("Application startup complete!")
 
 
 @app.get("/", response_model=ResponseMessage, tags=["General"])

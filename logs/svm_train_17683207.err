@@ -1,0 +1,1054 @@
+29-05-2025 20:56:59 - svm - INFO - modular_svm - <module> - Project Root: /scratch/s5130727/Applied-ML
+29-05-2025 20:56:59 - svm - INFO - modular_svm - <module> - Splits Directory used by SVM: /scratch/s5130727/Applied-ML/data/data_splits
+29-05-2025 20:56:59 - svm - INFO - modular_svm - <module> - Results Directory: /scratch/s5130727/Applied-ML/results
+29-05-2025 20:56:59 - svm - INFO - modular_svm - main_svm - Plotting outputs will be saved to: /scratch/s5130727/Applied-ML/results
+29-05-2025 20:56:59 - svm - INFO - modular_svm - main_svm - 
+--- Processing Fusion Configuration 1/4: eeg ---
+29-05-2025 20:56:59 - svm - INFO - modular_svm - load_data - Loading data for modalities: ['eeg'] for config 'eeg'
+29-05-2025 20:56:59 - svm - INFO - modular_svm - load_data - Data loaded successfully for config 'eeg'
+29-05-2025 20:56:59 - svm - INFO - modular_svm - load_data - Shapes: X_train: (15460, 16), y_train: (15460,)
+29-05-2025 20:56:59 - svm - INFO - modular_svm - load_data - Shapes: X_val: (488, 16), y_val: (488,)
+29-05-2025 20:56:59 - svm - INFO - modular_svm - load_data - Shapes: X_test: (1115, 16), y_test: (1115,)
+29-05-2025 20:56:59 - svm - INFO - modular_svm - main_svm - Building SVM Pipeline and Training Model for 'eeg'...
+29-05-2025 20:56:59 - svm - INFO - modular_svm - main_svm - Combining X_train and X_val for GridSearchCV hyperparameter tuning.
+29-05-2025 20:56:59 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Min samples per class in HP tuning data: 8
+29-05-2025 20:56:59 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - SMOTE k_neighbors set to: 5
+29-05-2025 20:56:59 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Starting GridSearchCV with cv=5...
+29-05-2025 21:51:52 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best SVM Params from GridSearchCV: {'svm__C': 100, 'svm__gamma': 'auto'}
+29-05-2025 21:51:52 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best F1 Macro (CV): 0.4208
+29-05-2025 21:51:52 - svm - INFO - modular_svm - plot_grid_search_results - GridSearchCV results plot saved to: /scratch/s5130727/Applied-ML/results/gs_results_eeg.png
+29-05-2025 21:51:52 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Training set for config 'eeg' ---
+29-05-2025 21:52:38 - svm - INFO - modular_svm - _evaluate_model - SVM Training Performance (Config: eeg):
+29-05-2025 21:52:38 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.04      1.00      0.08         8
+     Class 1       0.31      0.82      0.45       368
+     Class 2       0.15      0.73      0.25       656
+     Class 3       0.97      0.58      0.73     10892
+     Class 4       0.50      0.76      0.60      2008
+     Class 5       0.60      0.63      0.62      1528
+
+    accuracy                           0.62     15460
+   macro avg       0.43      0.75      0.46     15460
+weighted avg       0.82      0.62      0.67     15460
+
+29-05-2025 21:52:38 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6210, Macro F1: 0.4552, ROC AUC (OVR Macro): 0.9305060999248639
+29-05-2025 21:52:38 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Training - Config: eeg):
+[[   8    0    0    0    0    0]
+ [   4  300   44    5   11    4]
+ [   8   28  482   24   29   85]
+ [ 128  481 2045 6325 1405  508]
+ [  27   85  220  118 1520   38]
+ [  17   67  376   44   59  965]]
+29-05-2025 21:52:38 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_training.png
+29-05-2025 21:52:38 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Validation set for config 'eeg' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 21:52:39 - svm - INFO - modular_svm - _evaluate_model - SVM Validation Performance (Config: eeg):
+29-05-2025 21:52:39 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.36      0.71      0.48         7
+     Class 2       0.28      0.65      0.39        43
+     Class 3       1.00      0.74      0.85       383
+     Class 4       0.00      0.00      0.00         0
+     Class 5       0.43      0.73      0.54        55
+
+    accuracy                           0.73       488
+   macro avg       0.35      0.47      0.38       488
+weighted avg       0.86      0.73      0.77       488
+
+29-05-2025 21:52:39 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.7275, Macro F1: 0.5650, ROC AUC (OVR Macro): N/A
+29-05-2025 21:52:39 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Validation - Config: eeg):
+[[  0   0   0   0   0   0]
+ [  0   5   1   0   0   1]
+ [  0   0  28   0   0  15]
+ [  0   9  56 282   0  36]
+ [  0   0   0   0   0   0]
+ [  0   0  15   0   0  40]]
+29-05-2025 21:52:40 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_validation.png
+29-05-2025 21:52:40 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Test set for config 'eeg' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 21:52:43 - svm - INFO - modular_svm - _evaluate_model - SVM Test Performance (Config: eeg):
+29-05-2025 21:52:43 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.62      0.54      0.58        48
+     Class 2       0.18      0.18      0.18        85
+     Class 3       0.81      0.64      0.72       665
+     Class 4       0.45      0.86      0.59       187
+     Class 5       0.52      0.41      0.46       130
+
+    accuracy                           0.61      1115
+   macro avg       0.43      0.44      0.42      1115
+weighted avg       0.66      0.61      0.62      1115
+
+29-05-2025 21:52:43 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6126, Macro F1: 0.4206, ROC AUC (OVR Macro): N/A
+29-05-2025 21:52:43 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Test - Config: eeg):
+[[  0   0   0   0   0   0]
+ [  0  26   3  11   0   8]
+ [  0   0  15  27  19  24]
+ [  2  12  31 428 177  15]
+ [  0   0   1  24 161   1]
+ [  0   4  32  40   1  53]]
+29-05-2025 21:52:43 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_test.png
+29-05-2025 21:52:43 - svm - INFO - modular_svm - main_svm - Successfully saved best model for 'eeg' to: /scratch/s5130727/Applied-ML/results/svm_model_eeg.joblib
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py:528: FitFailedWarning: 
+14 fits failed out of a total of 25.
+The score on these train-test partitions for these parameters will be set to nan.
+If these failures are not expected, you can try to debug them by setting error_score='raise'.
+
+Below are more details about the failures:
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 2, n_samples = 2
+
+--------------------------------------------------------------------------------
+6 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 4, n_samples = 4
+
+--------------------------------------------------------------------------------
+3 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 1, n_samples = 1
+
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 3, n_samples = 3
+
+--------------------------------------------------------------------------------
+1 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 5, n_samples = 5
+
+  warnings.warn(some_fits_failed_message, FitFailedWarning)
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:668: RuntimeWarning: Mean of empty slice
+  train_scores_mean = np.nanmean(train_scores, axis=1)
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/numpy/lib/_nanfunctions_impl.py:2019: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:670: RuntimeWarning: Mean of empty slice
+  val_scores_mean = np.nanmean(val_scores, axis=1)
+29-05-2025 21:58:44 - svm - INFO - modular_svm - plot_learning_curve - Learning curve plot saved to: /scratch/s5130727/Applied-ML/results/lc_eeg.png
+29-05-2025 21:58:44 - svm - INFO - modular_svm - main_svm - Metrics for 'eeg' saved to: /scratch/s5130727/Applied-ML/results/metrics_eeg.json
+29-05-2025 21:58:44 - svm - INFO - modular_svm - main_svm - 
+--- Processing Fusion Configuration 2/4: eeg_emg ---
+29-05-2025 21:58:44 - svm - INFO - modular_svm - load_data - Loading data for modalities: ['eeg', 'emg'] for config 'eeg_emg'
+29-05-2025 21:58:44 - svm - INFO - modular_svm - load_data - Data loaded successfully for config 'eeg_emg'
+29-05-2025 21:58:44 - svm - INFO - modular_svm - load_data - Shapes: X_train: (15460, 17), y_train: (15460,)
+29-05-2025 21:58:44 - svm - INFO - modular_svm - load_data - Shapes: X_val: (488, 17), y_val: (488,)
+29-05-2025 21:58:44 - svm - INFO - modular_svm - load_data - Shapes: X_test: (1115, 17), y_test: (1115,)
+29-05-2025 21:58:44 - svm - INFO - modular_svm - main_svm - Building SVM Pipeline and Training Model for 'eeg_emg'...
+29-05-2025 21:58:44 - svm - INFO - modular_svm - main_svm - Combining X_train and X_val for GridSearchCV hyperparameter tuning.
+29-05-2025 21:58:44 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Min samples per class in HP tuning data: 8
+29-05-2025 21:58:44 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - SMOTE k_neighbors set to: 5
+29-05-2025 21:58:44 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Starting GridSearchCV with cv=5...
+29-05-2025 22:55:08 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best SVM Params from GridSearchCV: {'svm__C': 100, 'svm__gamma': 'auto'}
+29-05-2025 22:55:08 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best F1 Macro (CV): 0.4209
+29-05-2025 22:55:08 - svm - INFO - modular_svm - plot_grid_search_results - GridSearchCV results plot saved to: /scratch/s5130727/Applied-ML/results/gs_results_eeg_emg.png
+29-05-2025 22:55:08 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Training set for config 'eeg_emg' ---
+29-05-2025 22:55:55 - svm - INFO - modular_svm - _evaluate_model - SVM Training Performance (Config: eeg_emg):
+29-05-2025 22:55:55 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.04      1.00      0.08         8
+     Class 1       0.28      0.83      0.42       368
+     Class 2       0.15      0.71      0.25       656
+     Class 3       0.97      0.58      0.73     10892
+     Class 4       0.50      0.76      0.60      2008
+     Class 5       0.60      0.63      0.62      1528
+
+    accuracy                           0.62     15460
+   macro avg       0.43      0.75      0.45     15460
+weighted avg       0.82      0.62      0.67     15460
+
+29-05-2025 22:55:55 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6201, Macro F1: 0.4508, ROC AUC (OVR Macro): 0.9301033351994854
+29-05-2025 22:55:55 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Training - Config: eeg_emg):
+[[   8    0    0    0    0    0]
+ [   3  305   40    4   10    6]
+ [   9   33  469   28   30   87]
+ [ 122  556 1976 6319 1422  497]
+ [  24  105  206  111 1523   39]
+ [  17   78  374   39   57  963]]
+29-05-2025 22:55:55 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_training.png
+29-05-2025 22:55:55 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Validation set for config 'eeg_emg' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 22:55:57 - svm - INFO - modular_svm - _evaluate_model - SVM Validation Performance (Config: eeg_emg):
+29-05-2025 22:55:57 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.33      0.71      0.45         7
+     Class 2       0.30      0.67      0.42        43
+     Class 3       1.00      0.74      0.85       383
+     Class 4       0.00      0.00      0.00         0
+     Class 5       0.43      0.75      0.55        55
+
+    accuracy                           0.73       488
+   macro avg       0.34      0.48      0.38       488
+weighted avg       0.86      0.73      0.77       488
+
+29-05-2025 22:55:57 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.7316, Macro F1: 0.5666, ROC AUC (OVR Macro): N/A
+29-05-2025 22:55:57 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Validation - Config: eeg_emg):
+[[  0   0   0   0   0   0]
+ [  0   5   1   0   0   1]
+ [  0   0  29   0   0  14]
+ [  0  10  52 282   0  39]
+ [  0   0   0   0   0   0]
+ [  0   0  14   0   0  41]]
+29-05-2025 22:55:57 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_validation.png
+29-05-2025 22:55:57 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Test set for config 'eeg_emg' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 22:56:00 - svm - INFO - modular_svm - _evaluate_model - SVM Test Performance (Config: eeg_emg):
+29-05-2025 22:56:00 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.65      0.50      0.56        48
+     Class 2       0.18      0.18      0.18        85
+     Class 3       0.81      0.66      0.73       665
+     Class 4       0.46      0.86      0.60       187
+     Class 5       0.50      0.39      0.44       130
+
+    accuracy                           0.62      1115
+   macro avg       0.43      0.43      0.42      1115
+weighted avg       0.66      0.62      0.62      1115
+
+29-05-2025 22:56:00 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6179, Macro F1: 0.4181, ROC AUC (OVR Macro): N/A
+29-05-2025 22:56:00 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Test - Config: eeg_emg):
+[[  0   0   0   0   0   0]
+ [  0  24   4  12   0   8]
+ [  0   0  15  28  17  25]
+ [  1  10  30 438 169  17]
+ [  0   0   1  24 161   1]
+ [  0   3  35  40   1  51]]
+29-05-2025 22:56:00 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_test.png
+29-05-2025 22:56:00 - svm - INFO - modular_svm - main_svm - Successfully saved best model for 'eeg_emg' to: /scratch/s5130727/Applied-ML/results/svm_model_eeg_emg.joblib
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py:528: FitFailedWarning: 
+14 fits failed out of a total of 25.
+The score on these train-test partitions for these parameters will be set to nan.
+If these failures are not expected, you can try to debug them by setting error_score='raise'.
+
+Below are more details about the failures:
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 2, n_samples = 2
+
+--------------------------------------------------------------------------------
+6 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 4, n_samples = 4
+
+--------------------------------------------------------------------------------
+3 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 1, n_samples = 1
+
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 3, n_samples = 3
+
+--------------------------------------------------------------------------------
+1 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 5, n_samples = 5
+
+  warnings.warn(some_fits_failed_message, FitFailedWarning)
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:668: RuntimeWarning: Mean of empty slice
+  train_scores_mean = np.nanmean(train_scores, axis=1)
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/numpy/lib/_nanfunctions_impl.py:2019: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:670: RuntimeWarning: Mean of empty slice
+  val_scores_mean = np.nanmean(val_scores, axis=1)
+29-05-2025 23:02:03 - svm - INFO - modular_svm - plot_learning_curve - Learning curve plot saved to: /scratch/s5130727/Applied-ML/results/lc_eeg_emg.png
+29-05-2025 23:02:03 - svm - INFO - modular_svm - main_svm - Metrics for 'eeg_emg' saved to: /scratch/s5130727/Applied-ML/results/metrics_eeg_emg.json
+29-05-2025 23:02:03 - svm - INFO - modular_svm - main_svm - 
+--- Processing Fusion Configuration 3/4: eeg_eog ---
+29-05-2025 23:02:03 - svm - INFO - modular_svm - load_data - Loading data for modalities: ['eeg', 'eog'] for config 'eeg_eog'
+29-05-2025 23:02:03 - svm - INFO - modular_svm - load_data - Data loaded successfully for config 'eeg_eog'
+29-05-2025 23:02:03 - svm - INFO - modular_svm - load_data - Shapes: X_train: (15460, 18), y_train: (15460,)
+29-05-2025 23:02:03 - svm - INFO - modular_svm - load_data - Shapes: X_val: (488, 18), y_val: (488,)
+29-05-2025 23:02:03 - svm - INFO - modular_svm - load_data - Shapes: X_test: (1115, 18), y_test: (1115,)
+29-05-2025 23:02:03 - svm - INFO - modular_svm - main_svm - Building SVM Pipeline and Training Model for 'eeg_eog'...
+29-05-2025 23:02:03 - svm - INFO - modular_svm - main_svm - Combining X_train and X_val for GridSearchCV hyperparameter tuning.
+29-05-2025 23:02:03 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Min samples per class in HP tuning data: 8
+29-05-2025 23:02:03 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - SMOTE k_neighbors set to: 5
+29-05-2025 23:02:03 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Starting GridSearchCV with cv=5...
+29-05-2025 23:58:53 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best SVM Params from GridSearchCV: {'svm__C': 100, 'svm__gamma': 'auto'}
+29-05-2025 23:58:53 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best F1 Macro (CV): 0.4202
+29-05-2025 23:58:53 - svm - INFO - modular_svm - plot_grid_search_results - GridSearchCV results plot saved to: /scratch/s5130727/Applied-ML/results/gs_results_eeg_eog.png
+29-05-2025 23:58:53 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Training set for config 'eeg_eog' ---
+29-05-2025 23:59:39 - svm - INFO - modular_svm - _evaluate_model - SVM Training Performance (Config: eeg_eog):
+29-05-2025 23:59:39 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.04      1.00      0.07         8
+     Class 1       0.27      0.83      0.40       368
+     Class 2       0.16      0.70      0.26       656
+     Class 3       0.97      0.58      0.73     10892
+     Class 4       0.50      0.76      0.60      2008
+     Class 5       0.58      0.62      0.60      1528
+
+    accuracy                           0.62     15460
+   macro avg       0.42      0.75      0.44     15460
+weighted avg       0.82      0.62      0.67     15460
+
+29-05-2025 23:59:39 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6196, Macro F1: 0.4441, ROC AUC (OVR Macro): 0.9294698695863418
+29-05-2025 23:59:39 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Training - Config: eeg_eog):
+[[   8    0    0    0    0    0]
+ [   5  306   37    4   11    5]
+ [  11   41  462   32   23   87]
+ [ 148  606 1826 6342 1423  547]
+ [  24  109  194  120 1518   43]
+ [  16   86  372   57   54  943]]
+29-05-2025 23:59:39 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_eog_training.png
+29-05-2025 23:59:39 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Validation set for config 'eeg_eog' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 23:59:40 - svm - INFO - modular_svm - _evaluate_model - SVM Validation Performance (Config: eeg_eog):
+29-05-2025 23:59:40 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.29      0.57      0.38         7
+     Class 2       0.36      0.67      0.47        43
+     Class 3       1.00      0.78      0.88       383
+     Class 4       0.00      0.00      0.00         0
+     Class 5       0.44      0.75      0.55        55
+
+    accuracy                           0.76       488
+   macro avg       0.35      0.46      0.38       488
+weighted avg       0.87      0.76      0.80       488
+
+29-05-2025 23:59:40 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.7643, Macro F1: 0.5690, ROC AUC (OVR Macro): N/A
+29-05-2025 23:59:40 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Validation - Config: eeg_eog):
+[[  0   0   0   0   0   0]
+ [  0   4   1   0   0   2]
+ [  0   0  29   0   0  14]
+ [  0  10  37 299   0  37]
+ [  0   0   0   0   0   0]
+ [  0   0  14   0   0  41]]
+29-05-2025 23:59:40 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_eog_validation.png
+29-05-2025 23:59:40 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Test set for config 'eeg_eog' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+29-05-2025 23:59:44 - svm - INFO - modular_svm - _evaluate_model - SVM Test Performance (Config: eeg_eog):
+29-05-2025 23:59:44 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.70      0.40      0.51        48
+     Class 2       0.17      0.19      0.18        85
+     Class 3       0.79      0.64      0.71       665
+     Class 4       0.44      0.83      0.57       187
+     Class 5       0.52      0.40      0.45       130
+
+    accuracy                           0.60      1115
+   macro avg       0.44      0.41      0.40      1115
+weighted avg       0.65      0.60      0.61      1115
+
+29-05-2025 23:59:44 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6000, Macro F1: 0.4037, ROC AUC (OVR Macro): N/A
+29-05-2025 23:59:44 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Test - Config: eeg_eog):
+[[  0   0   0   0   0   0]
+ [  0  19   5  18   0   6]
+ [  0   0  16  27  17  25]
+ [  2   8  31 426 182  16]
+ [  0   0   1  29 156   1]
+ [  0   0  39  38   1  52]]
+29-05-2025 23:59:44 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_eog_test.png
+29-05-2025 23:59:44 - svm - INFO - modular_svm - main_svm - Successfully saved best model for 'eeg_eog' to: /scratch/s5130727/Applied-ML/results/svm_model_eeg_eog.joblib
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py:528: FitFailedWarning: 
+14 fits failed out of a total of 25.
+The score on these train-test partitions for these parameters will be set to nan.
+If these failures are not expected, you can try to debug them by setting error_score='raise'.
+
+Below are more details about the failures:
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 2, n_samples = 2
+
+--------------------------------------------------------------------------------
+6 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 4, n_samples = 4
+
+--------------------------------------------------------------------------------
+3 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 1, n_samples = 1
+
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 3, n_samples = 3
+
+--------------------------------------------------------------------------------
+1 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 5, n_samples = 5
+
+  warnings.warn(some_fits_failed_message, FitFailedWarning)
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:668: RuntimeWarning: Mean of empty slice
+  train_scores_mean = np.nanmean(train_scores, axis=1)
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/numpy/lib/_nanfunctions_impl.py:2019: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:670: RuntimeWarning: Mean of empty slice
+  val_scores_mean = np.nanmean(val_scores, axis=1)
+30-05-2025 00:05:50 - svm - INFO - modular_svm - plot_learning_curve - Learning curve plot saved to: /scratch/s5130727/Applied-ML/results/lc_eeg_eog.png
+30-05-2025 00:05:50 - svm - INFO - modular_svm - main_svm - Metrics for 'eeg_eog' saved to: /scratch/s5130727/Applied-ML/results/metrics_eeg_eog.json
+30-05-2025 00:05:50 - svm - INFO - modular_svm - main_svm - 
+--- Processing Fusion Configuration 4/4: eeg_emg_eog ---
+30-05-2025 00:05:50 - svm - INFO - modular_svm - load_data - Loading data for modalities: ['eeg', 'emg', 'eog'] for config 'eeg_emg_eog'
+30-05-2025 00:05:50 - svm - INFO - modular_svm - load_data - Data loaded successfully for config 'eeg_emg_eog'
+30-05-2025 00:05:50 - svm - INFO - modular_svm - load_data - Shapes: X_train: (15460, 19), y_train: (15460,)
+30-05-2025 00:05:50 - svm - INFO - modular_svm - load_data - Shapes: X_val: (488, 19), y_val: (488,)
+30-05-2025 00:05:50 - svm - INFO - modular_svm - load_data - Shapes: X_test: (1115, 19), y_test: (1115,)
+30-05-2025 00:05:50 - svm - INFO - modular_svm - main_svm - Building SVM Pipeline and Training Model for 'eeg_emg_eog'...
+30-05-2025 00:05:50 - svm - INFO - modular_svm - main_svm - Combining X_train and X_val for GridSearchCV hyperparameter tuning.
+30-05-2025 00:05:50 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Min samples per class in HP tuning data: 8
+30-05-2025 00:05:50 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - SMOTE k_neighbors set to: 5
+30-05-2025 00:05:50 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Starting GridSearchCV with cv=5...
+30-05-2025 01:02:44 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best SVM Params from GridSearchCV: {'svm__C': 100, 'svm__gamma': 'auto'}
+30-05-2025 01:02:44 - svm - INFO - modular_svm - _train_svm_model_with_gridsearch - Best F1 Macro (CV): 0.4194
+30-05-2025 01:02:44 - svm - INFO - modular_svm - plot_grid_search_results - GridSearchCV results plot saved to: /scratch/s5130727/Applied-ML/results/gs_results_eeg_emg_eog.png
+30-05-2025 01:02:44 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Training set for config 'eeg_emg_eog' ---
+30-05-2025 01:03:35 - svm - INFO - modular_svm - _evaluate_model - SVM Training Performance (Config: eeg_emg_eog):
+30-05-2025 01:03:35 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.04      1.00      0.07         8
+     Class 1       0.26      0.84      0.39       368
+     Class 2       0.16      0.69      0.26       656
+     Class 3       0.97      0.58      0.72     10892
+     Class 4       0.50      0.76      0.60      2008
+     Class 5       0.58      0.62      0.60      1528
+
+    accuracy                           0.62     15460
+   macro avg       0.42      0.75      0.44     15460
+weighted avg       0.82      0.62      0.67     15460
+
+30-05-2025 01:03:35 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.6164, Macro F1: 0.4407, ROC AUC (OVR Macro): 0.9287698635937266
+30-05-2025 01:03:35 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Training - Config: eeg_emg_eog):
+[[   8    0    0    0    0    0]
+ [   5  308   36    5    9    5]
+ [  11   40  451   33   26   95]
+ [ 148  640 1816 6297 1450  541]
+ [  25  117  194  111 1523   38]
+ [  19   99  361   55   51  943]]
+30-05-2025 01:03:35 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_eog_training.png
+30-05-2025 01:03:35 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Validation set for config 'eeg_emg_eog' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+30-05-2025 01:03:37 - svm - INFO - modular_svm - _evaluate_model - SVM Validation Performance (Config: eeg_emg_eog):
+30-05-2025 01:03:37 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.27      0.57      0.36         7
+     Class 2       0.35      0.67      0.46        43
+     Class 3       1.00      0.77      0.87       383
+     Class 4       0.00      0.00      0.00         0
+     Class 5       0.43      0.73      0.54        55
+
+    accuracy                           0.76       488
+   macro avg       0.34      0.46      0.37       488
+weighted avg       0.87      0.76      0.79       488
+
+30-05-2025 01:03:37 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.7561, Macro F1: 0.5582, ROC AUC (OVR Macro): N/A
+30-05-2025 01:03:37 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Validation - Config: eeg_emg_eog):
+[[  0   0   0   0   0   0]
+ [  0   4   1   0   0   2]
+ [  0   0  29   0   0  14]
+ [  0  11  38 296   0  38]
+ [  0   0   0   0   0   0]
+ [  0   0  15   0   0  40]]
+30-05-2025 01:03:37 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_eog_validation.png
+30-05-2025 01:03:37 - svm - INFO - modular_svm - _evaluate_model - --- Evaluating on Test set for config 'eeg_emg_eog' ---
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:379: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+30-05-2025 01:03:40 - svm - INFO - modular_svm - _evaluate_model - SVM Test Performance (Config: eeg_emg_eog):
+30-05-2025 01:03:40 - svm - INFO - modular_svm - _evaluate_model - 
+              precision    recall  f1-score   support
+
+     Class 0       0.00      0.00      0.00         0
+     Class 1       0.74      0.35      0.48        48
+     Class 2       0.18      0.19      0.18        85
+     Class 3       0.79      0.64      0.70       665
+     Class 4       0.43      0.83      0.57       187
+     Class 5       0.51      0.41      0.45       130
+
+    accuracy                           0.60      1115
+   macro avg       0.44      0.40      0.40      1115
+weighted avg       0.65      0.60      0.60      1115
+
+30-05-2025 01:03:40 - svm - INFO - modular_svm - _evaluate_model - Accuracy: 0.5973, Macro F1: 0.3990, ROC AUC (OVR Macro): N/A
+30-05-2025 01:03:40 - svm - INFO - modular_svm - _evaluate_model - Confusion Matrix (Test - Config: eeg_emg_eog):
+[[  0   0   0   0   0   0]
+ [  0  17   5  20   0   6]
+ [  0   0  16  27  17  25]
+ [  3   6  28 424 186  18]
+ [  0   0   0  30 156   1]
+ [  0   0  39  37   1  53]]
+30-05-2025 01:03:41 - svm - INFO - modular_svm - plot_confusion_matrix - Confusion matrix plot saved to: /scratch/s5130727/Applied-ML/results/cm_eeg_emg_eog_test.png
+30-05-2025 01:03:41 - svm - INFO - modular_svm - main_svm - Successfully saved best model for 'eeg_emg_eog' to: /scratch/s5130727/Applied-ML/results/svm_model_eeg_emg_eog.joblib
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py:528: FitFailedWarning: 
+14 fits failed out of a total of 25.
+The score on these train-test partitions for these parameters will be set to nan.
+If these failures are not expected, you can try to debug them by setting error_score='raise'.
+
+Below are more details about the failures:
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 2, n_samples = 2
+
+--------------------------------------------------------------------------------
+6 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 4, n_samples = 4
+
+--------------------------------------------------------------------------------
+3 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 1, n_samples = 1
+
+--------------------------------------------------------------------------------
+2 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 3, n_samples = 3
+
+--------------------------------------------------------------------------------
+1 fits failed with the following error:
+Traceback (most recent call last):
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/model_selection/_validation.py", line 866, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 518, in fit
+    Xt, yt = self._fit(X, y, routed_params, raw_params=params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 440, in _fit
+    X, y, fitted_transformer = fit_resample_one_cached(
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/joblib/memory.py", line 326, in __call__
+    return self.func(*args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/pipeline.py", line 1336, in _fit_resample_one
+    X_res, y_res = sampler.fit_resample(X, y, **params.get("fit_resample", {}))
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 202, in fit_resample
+    return super().fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/base.py", line 1389, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/base.py", line 105, in fit_resample
+    output = self._fit_resample(X, y, **params)
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/imblearn/over_sampling/_smote/base.py", line 359, in _fit_resample
+    nns = self.nn_k_.kneighbors(X_class, return_distance=False)[:, 1:]
+  File "/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/sklearn/neighbors/_base.py", line 854, in kneighbors
+    raise ValueError(
+ValueError: Expected n_neighbors <= n_samples_fit, but n_neighbors = 6, n_samples_fit = 5, n_samples = 5
+
+  warnings.warn(some_fits_failed_message, FitFailedWarning)
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:668: RuntimeWarning: Mean of empty slice
+  train_scores_mean = np.nanmean(train_scores, axis=1)
+/home4/s5130727/.conda/envs/AML/lib/python3.10/site-packages/numpy/lib/_nanfunctions_impl.py:2019: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:670: RuntimeWarning: Mean of empty slice
+  val_scores_mean = np.nanmean(val_scores, axis=1)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - plot_learning_curve - Learning curve plot saved to: /scratch/s5130727/Applied-ML/results/lc_eeg_emg_eog.png
+30-05-2025 01:10:14 - svm - INFO - modular_svm - main_svm - Metrics for 'eeg_emg_eog' saved to: /scratch/s5130727/Applied-ML/results/metrics_eeg_emg_eog.json
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - 
+
+--- Overall Summary of SVM Model Runs ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - 
+Configuration: eeg (Processed 1 time(s))
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Training Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6210 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4552 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): 0.9305 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Validation Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.7275 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.5650 +/- 0.0000 (1 run)
+/scratch/s5130727/Applied-ML/src/models/modular_svm.py:582: RuntimeWarning: Mean of empty slice
+  np.nanmean(metric_values) if metric_values else np.nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Test Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6126 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4206 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - 
+Configuration: eeg_emg (Processed 1 time(s))
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Training Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6201 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4508 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): 0.9301 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Validation Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.7316 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.5666 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Test Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6179 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4181 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - 
+Configuration: eeg_eog (Processed 1 time(s))
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Training Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6196 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4441 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): 0.9295 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Validation Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.7643 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.5690 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Test Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6000 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4037 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - 
+Configuration: eeg_emg_eog (Processed 1 time(s))
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Training Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.6164 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.4407 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): 0.9288 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Validation Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.7561 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.5582 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   --- Test Set Metrics ---
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Accuracy: 0.5973 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean Macro F1-score: 0.3990 +/- 0.0000 (1 run)
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results -   Mean ROC AUC (OVR Macro): nan +/- nan
+30-05-2025 01:10:14 - svm - INFO - modular_svm - _log_overall_results - --- End of Overall Summary ---

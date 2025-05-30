@@ -63,6 +63,7 @@ The project uses the [Sleep-EDF Database](https://physionet.org/content/sleep-ed
 - Event markers
 
 **Note**: The `data/` directory is not tracked by Git. Ensure you download the dataset manually.
+The user has to ensure that they have `awscli` installed on their computer:
 
 ## Usage
 1. **Activate the Anaconda environment**:
@@ -70,12 +71,29 @@ The project uses the [Sleep-EDF Database](https://physionet.org/content/sleep-ed
    conda activate AML
    ```
 
-2. **Run the main script**:
+2. **Download the data**:
+   If not already done, the user must download the data manually:
    ```bash
-   python src/main.py
+   pip install awscli
+
+   aws --version
+
+   cd Applied-ML
+
+   aws s3 sync --no-sign-request s3://physionet-open/sleep-edfx/1.0.0/ ./data
+   ```
+   If using MacOS, the user can also make use of the `caffeinate` built-in function to make the process od downloading faster:
+   ```bash
+   caffeinate -i aws s3 sync --no-sign-request s3://physionet-open/sleep-edfx/1.0.0/ ./data
    ```
 
-3. **Experiment in Jupyter notebooks**:
+3. **Run the main script**:
+   This is used to run the entire pipeline process which includes the preprocessing of the data, splitting (with feature engineering and data augmentation) and training of the SVM models:
+   ```bash
+   python src/script.py
+   ```
+
+4. **Experiment in Jupyter notebooks**:
    Place exploratory code in the `notebooks/` directory
 
 ## Pre-Commit Hooks
@@ -100,3 +118,18 @@ Pre-commit hooks automatically run checks before each Git commit to ensure code 
   - Submit pull requests for code review
 - **Testing**: Add unit tests in the `tests/` directory using pytest.
 - **Notebooks**: Use `notebooks/` for experimentation, but move stable code to `src/`.
+
+## How to run the FastAPI app
+
+After activating the Anaconda environment, the user has to manually open the app:
+```bash
+uvicorn main:app --reload
+```
+The app will start, and the user can copy the URL address and paste it on their browser with the **/docs** added at the end (e.g., `http://127.0.0.1:8000/docs`).
+
+To run tests on the API endpoints:
+```bash
+pytest tests/test_main.py
+pytest tests/test_pipeline.py
+pytest tests/test_schemas.py
+```

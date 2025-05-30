@@ -1,0 +1,39 @@
+{
+    "test_accuracy": [
+        0.6179372197309417
+    ],
+    "test_f1_macro": [
+        0.4180778607939524
+    ],
+    "test_roc_auc_ovr": [
+        NaN
+    ],
+    "test_classification_report": [
+        "              precision    recall  f1-score   support\n\n     Class 0       0.00      0.00      0.00         0\n     Class 1       0.65      0.50      0.56        48\n     Class 2       0.18      0.18      0.18        85\n     Class 3       0.81      0.66      0.73       665\n     Class 4       0.46      0.86      0.60       187\n     Class 5       0.50      0.39      0.44       130\n\n    accuracy                           0.62      1115\n   macro avg       0.43      0.43      0.42      1115\nweighted avg       0.66      0.62      0.62      1115\n"
+    ],
+    "train_accuracy": [
+        0.6201164294954722
+    ],
+    "train_f1_macro": [
+        0.450847983322471
+    ],
+    "train_roc_auc_ovr": [
+        0.9301033351994854
+    ],
+    "train_classification_report": [
+        "              precision    recall  f1-score   support\n\n     Class 0       0.04      1.00      0.08         8\n     Class 1       0.28      0.83      0.42       368\n     Class 2       0.15      0.71      0.25       656\n     Class 3       0.97      0.58      0.73     10892\n     Class 4       0.50      0.76      0.60      2008\n     Class 5       0.60      0.63      0.62      1528\n\n    accuracy                           0.62     15460\n   macro avg       0.43      0.75      0.45     15460\nweighted avg       0.82      0.62      0.67     15460\n"
+    ],
+    "val_accuracy": [
+        0.7315573770491803
+    ],
+    "val_f1_macro": [
+        0.5666496522535902
+    ],
+    "val_roc_auc_ovr": [
+        NaN
+    ],
+    "val_classification_report": [
+        "              precision    recall  f1-score   support\n\n     Class 0       0.00      0.00      0.00         0\n     Class 1       0.33      0.71      0.45         7\n     Class 2       0.30      0.67      0.42        43\n     Class 3       1.00      0.74      0.85       383\n     Class 4       0.00      0.00      0.00         0\n     Class 5       0.43      0.75      0.55        55\n\n    accuracy                           0.73       488\n   macro avg       0.34      0.48      0.38       488\nweighted avg       0.86      0.73      0.77       488\n"
+    ],
+    "count": 1
+}
