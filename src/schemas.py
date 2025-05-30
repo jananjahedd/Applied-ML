@@ -14,10 +14,14 @@ class FileDetail(BaseModel):
 
 class AvailableFilesResponse(BaseModel):
     cassette_files: Dict[str, str] = Field(
-        ..., json_schema_extra={"example": {"1": "patient1-PSG.edf"}}
+        ...,
+        description="Cassette EDF files with ID as key and filename as value",
+        json_schema_extra={"example": {"1": "SC4171E0-PSG.edf", "2": "SC4172E0-PSG.edf"}}
     )
     telemetry_files: Dict[str, str] = Field(
-        ..., json_schema_extra={"example": {"3": "patient3-PSG.edf"}}
+        ...,
+        description="Telemetry EDF files with ID as key and filename as value",
+        json_schema_extra={"example": {"3": "ST7052J0-PSG.edf", "4": "ST7053J0-PSG.edf"}}
     )
 
 
@@ -28,22 +32,65 @@ class SelectedFileDetail(BaseModel):
 
 class SelectedFilesResponse(BaseModel):
     selected_files: Dict[str, str] = Field(
-        ..., json_schema_extra={"example": {
-            "1": "example-data/sleep-cassette/SCA121B-PSG.edf"}
-        }
+        ...,
+        description="Selected files with ID as key and full path as value",
+        json_schema_extra={"example": {
+            "1": "example-data/sleep-cassette/SC4171E0-PSG.edf",
+            "2": "example-data/sleep-cassette/SC4172E0-PSG.edf"
+        }}
     )
     total_selected: int
 
 
 class PatientInfo(BaseModel):
-    number: int
+    patient_id: Optional[str] = Field(None, description="String identifier for the patient")
+    number: int = Field(description="Internal numeric ID")
     age: Optional[int] = None
     sex: Optional[str] = None
-    num_recordings: Optional[int] = None
+    num_recordings: Optional[int] = Field(0, description="Number of EDF files linked to this patient")
+    linked_files: Optional[List[str]] = Field([], description="List of linked EDF filenames")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "patient_id": "john_doe",
+                "number": 1234,
+                "age": 45,
+                "sex": "male",
+                "num_recordings": 2,
+                "linked_files": ["SC4171E0-PSG.edf", "SC4172E0-PSG.edf"]
+            }
+        }
 
 
 class AllPatientsResponse(BaseModel):
-    patients: Dict[str, PatientInfo]
+    patients: Dict[str, PatientInfo] = Field(
+        description="Dictionary with patient_id as key and patient info as value"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "patients": {
+                    "john_doe": {
+                        "patient_id": "john_doe",
+                        "number": 1234,
+                        "age": 45,
+                        "sex": "male",
+                        "num_recordings": 1,
+                        "linked_files": ["SC4171E0-PSG.edf"]
+                    },
+                    "jane_smith": {
+                        "patient_id": "jane_smith",
+                        "number": 5678,
+                        "age": 32,
+                        "sex": "female",
+                        "num_recordings": 2,
+                        "linked_files": ["SC4172E0-PSG.edf", "SC4173E0-PSG.edf"]
+                    }
+                }
+            }
+        }
 
 
 class PreprocessingOutput(BaseModel):
@@ -67,7 +114,6 @@ class UploadResponse(BaseModel):
     preprocessing_output: PreprocessingOutput
 
 
-# Input for the prediction endpoint
 class PredictionInput(BaseModel):
     features: List[float] = Field(
         ..., json_schema_extra={"example": [0.1, 0.5, 0.2, 0.8, 1.5]}
@@ -75,7 +121,6 @@ class PredictionInput(BaseModel):
     feature_names: Optional[List[str]] = None
 
 
-# Output for the prediction endpoint
 class PredictionOutput(BaseModel):
     prediction_label: str = Field(..., json_schema_extra={"example": "N2"})
     prediction_id: int = Field(..., json_schema_extra={"example": 3})

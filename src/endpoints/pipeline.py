@@ -1,6 +1,7 @@
 """Module for the entire pipeline endpoints."""
 import os
 import tempfile
+import re
 from typing import Dict, List, Optional, Any, Tuple
 import joblib
 import numpy as np
@@ -337,62 +338,199 @@ def evaluate_model_on_data(model, X_test, y_test, config: str,
 
 
 def load_pretrained_metrics(config: str) -> Dict[str, Any]:
-    possible_splits_dirs = ["splits-data", "data/splits",
-                            "processed-data", MODELS_DIR, "results"]
+    """
+    Load metrics from SVM training log files instead of .npz files.
+    Parses the log to extract training, validation, and test metrics.
+    """
+    # change if needed
+    possible_log_dirs = [
+        "logs",
+        "../logs",
+        "../../logs",
+        "/scratch/s5130727/Applied-ML/logs",
+        "/Users/jananjahed/Desktop/ML_applied/Applied-ML/logs"
+    ]
 
-    train_metrics = None
-    val_metrics = None
-    test_metrics = None
+    log_file_path = None
 
-    for splits_dir in possible_splits_dirs:
-        try:
-            train_path = os.path.join(
-                splits_dir, f"train_{config}_featured.npz"
-            )
-            if os.path.exists(train_path):
-                train_data = np.load(train_path, allow_pickle=True)
-                model = load_model(config)
-                X_train = train_data['X_train']
-                y_train = train_data['y_train']
-                train_metrics = evaluate_model_on_data(
-                    model, X_train, y_train, config
-                )
-                train_metrics["data_source"] = train_path
+    for log_dir in possible_log_dirs:
+        if os.path.exists(log_dir):
+            try:
+                log_files = [f for f in os.listdir(log_dir) if f.startswith("svm_train_") and f.endswith(".err")]
+                if log_files:
+                    log_files.sort(reverse=True)
+                    log_file_path = os.path.join(log_dir, log_files[0])
+                    break
+            except Exception as e:
+                logger.warning(f"Could not access log directory {log_dir}: {e}")
+                continue
 
-            val_path = os.path.join(splits_dir, f"val_{config}_featured.npz")
-            if os.path.exists(val_path):
-                val_data = np.load(val_path, allow_pickle=True)
-                model = load_model(config)
-                X_val = val_data['X_val']
-                y_val = val_data['y_val']
-                val_metrics = evaluate_model_on_data(
-                    model, X_val, y_val, config
-                )
-                val_metrics["data_source"] = val_path
+    if not log_file_path or not os.path.exists(log_file_path):
+        logger.warning(f"No SVM training log file found for config '{config}'")
+        return {
+            "training_metrics": None,
+            "validation_metrics": None,
+            "test_metrics": None
+        }
 
-            test_path = os.path.join(splits_dir, f"test_{config}_featured.npz")
-            if os.path.exists(test_path):
-                test_data = np.load(test_path, allow_pickle=True)
-                model = load_model(config)
-                X_test = test_data['X_test']
-                y_test = test_data['y_test']
-                test_metrics = evaluate_model_on_data(
-                    model, X_test, y_test, config
-                )
-                test_metrics["data_source"] = test_path
+    try:
+        with open(log_file_path, 'r') as f:
+            log_content = f.read()
 
-            if train_metrics or val_metrics or test_metrics:
-                break
+        logger.info(f"Found and reading log file: {log_file_path}")
+        metrics = parse_metrics_from_log(log_content, config)
+        return metrics
 
-        except Exception as e:
-            logger.warning(f"Error loading data from {splits_dir}: {e}")
-            continue
+    except Exception as e:
+        logger.error(f"Error reading log file {log_file_path}: {e}")
+        return {
+            "training_metrics": None,
+            "validation_metrics": None,
+            "test_metrics": None
+        }
+
+
+def parse_metrics_from_log(log_content: str, config: str) -> Dict[str, Any]:
+    """
+    Parse metrics from the SVM training log content for a specific configuration.
+    """
+    config_sections = log_content.split("--- Processing Fusion Configuration")
+
+    target_section = None
+    for section in config_sections:
+        if f": {config} ---" in section:
+            target_section = section
+            break
+
+    if not target_section:
+        logger.warning(f"Configuration '{config}' not found in log")
+        return {
+            "training_metrics": None,
+            "validation_metrics": None,
+            "test_metrics": None
+        }
+
+    training_metrics = extract_dataset_metrics(target_section, "Training", config)
+    validation_metrics = extract_dataset_metrics(target_section, "Validation", config)
+    test_metrics = extract_dataset_metrics(target_section, "Test", config)
 
     return {
-        "training_metrics": train_metrics,
-        "validation_metrics": val_metrics,
+        "training_metrics": training_metrics,
+        "validation_metrics": validation_metrics,
         "test_metrics": test_metrics
     }
+
+
+def extract_dataset_metrics(section: str, dataset_type: str, config: str) -> Optional[Dict[str, Any]]:
+    """
+    Extract metrics for a specific dataset type (Training/Validation/Test) from log section.
+    """
+    try:
+        # Find the performance section for this dataset type
+        pattern = rf"--- Evaluating on {dataset_type} set for config '{config}' ---.*?(?=--- Evaluating on|--- Processing|$)"
+        match = re.search(pattern, section, re.DOTALL)
+
+        if not match:
+            return None
+
+        dataset_section = match.group(0)
+
+        accuracy_match = re.search(r"Accuracy: ([\d.]+)", dataset_section)
+        f1_match = re.search(r"Macro F1: ([\d.]+)", dataset_section)
+        roc_auc_match = re.search(r"ROC AUC \(OVR Macro\): ([\d.]+|N/A)", dataset_section)
+
+        if not (accuracy_match and f1_match):
+            return None
+
+        accuracy = float(accuracy_match.group(1))
+        macro_f1 = float(f1_match.group(1))
+        roc_auc = None if not roc_auc_match or roc_auc_match.group(1) == "N/A" else float(roc_auc_match.group(1))
+
+        report_pattern = r"precision\s+recall\s+f1-score\s+support(.*?)accuracy"
+        report_match = re.search(report_pattern, dataset_section, re.DOTALL)
+
+        per_class_metrics = {}
+        dataset_size = 0
+
+        if report_match:
+            report_lines = report_match.group(1).strip().split('\n')
+
+            for line in report_lines:
+                line = line.strip()
+                if line.startswith('Class'):
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        class_name = parts[0] + " " + parts[1]  # "Class 0", "Class 1", etc.
+                        precision = float(parts[2])
+                        recall = float(parts[3])
+                        f1_score = float(parts[4])
+                        support = int(parts[5])
+
+                        per_class_metrics[class_name] = {
+                            "precision": precision,
+                            "recall": recall,
+                            "f1_score": f1_score,
+                            "support": support
+                        }
+                        dataset_size += support
+
+        cm_pattern = r"Confusion Matrix \(" + dataset_type + rf" - Config: {config}\):\s*(\[.*?\])"
+        cm_match = re.search(cm_pattern, dataset_section, re.DOTALL)
+
+        confusion_matrix = None
+        if cm_match:
+            try:
+                cm_text = cm_match.group(1)
+                cm_lines = []
+                for line in cm_text.split('\n'):
+                    line = line.strip()
+                    if line.startswith('[') and line.endswith(']'):
+                        numbers = re.findall(r'\d+', line)
+                        if numbers:
+                            cm_lines.append([int(n) for n in numbers])
+
+                if cm_lines:
+                    confusion_matrix = {
+                        "matrix": cm_lines,
+                        "labels": list(per_class_metrics.keys())
+                    }
+            except Exception as e:
+                logger.warning(f"Could not parse confusion matrix: {e}")
+
+        if per_class_metrics:
+            precisions = [m["precision"] for m in per_class_metrics.values()]
+            recalls = [m["recall"] for m in per_class_metrics.values()]
+            f1_scores = [m["f1_score"] for m in per_class_metrics.values()]
+            supports = [m["support"] for m in per_class_metrics.values()]
+
+            total_support = sum(supports)
+            weighted_precision = sum(p * s for p, s in zip(precisions, supports)) / total_support if total_support > 0 else 0
+            weighted_recall = sum(r * s for r, s in zip(recalls, supports)) / total_support if total_support > 0 else 0
+            weighted_f1 = sum(f * s for f, s in zip(f1_scores, supports)) / total_support if total_support > 0 else 0
+        else:
+            weighted_precision = weighted_recall = weighted_f1 = 0
+
+        return {
+            "dataset_size": dataset_size,
+            "overall_metrics": {
+                "accuracy": accuracy,
+                "macro_precision": sum(precisions) / len(precisions) if precisions else 0,
+                "macro_recall": sum(recalls) / len(recalls) if recalls else 0,
+                "macro_f1_score": macro_f1,
+                "weighted_precision": weighted_precision,
+                "weighted_recall": weighted_recall,
+                "weighted_f1_score": weighted_f1,
+                "roc_auc_macro": roc_auc
+            },
+            "per_class_metrics": per_class_metrics,
+            "confusion_matrix": confusion_matrix,
+            "class_distribution": {name: metrics["support"] for name, metrics in per_class_metrics.items()},
+            "data_source": f"Parsed from SVM training log - {dataset_type} set"
+        }
+
+    except Exception as e:
+        logger.error(f"Error extracting {dataset_type} metrics for {config}: {e}")
+        return None
 
 
 @router.post("/predict-edf", response_model=PredictEDFResponse)
@@ -408,12 +546,9 @@ async def predict_edf_file(
     Complete Automated Sleep Stage Prediction Pipeline
 
     Model Performance (Validation Set):
-    - Accuracy: x% vs 20% random guessing (5-class problem)
-    - F1-Score: x (significantly above random)
-    - ROC-AUC: x (good discrimination)
-    - Tested on 10 subjects, x epochs
+    - Accuracy: ~60% vs 20% random guessing (5-class problem)
+    - Tested on 10 subjects
     - Significantly outperforms random classification
-
 
     Just upload your EDF file and get sleep stage predictions!
 
@@ -598,9 +733,8 @@ async def get_all_performance_metrics(config: str, request: Request = None):
     - Model comparison and overfitting analysis
 
     Model Performance Evidence:
-    - Validation Accuracy: x vs 20% random guessing
-    - Test Accuracy: x% (good generalization)
-    - F1-Score: 0.x (above random)
+    - Validation Accuracy: ~70% vs 20% random guessing
+    - Test Accuracy: ~60%
     """
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
@@ -906,309 +1040,3 @@ async def test_model_prediction(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error testing model '{config}': {str(e)}"
         )
-
-
-@router.post("/predict-edf-with-metrics", response_model=Dict[str, Any])
-async def predict_edf_with_comprehensive_metrics(
-    edf_file: UploadFile = File(..., description="EDF sleep recording file"),
-    hypno_file: UploadFile = File(
-        ..., description="Hypnogram file for ground truth evaluation"
-    ),
-    config: str = DEFAULT_CONFIG,
-    request: Request = None
-):
-    """
-    Complete Prediction + Performance Analysis
-
-    Upload EDF + hypnogram to get:
-    1. Sleep stage predictions for your file
-    2. Performance metrics on YOUR specific file
-    3. Comparison with pre-trained model performance
-    4. Model confidence and reliability analysis
-
-    Perfect for: Comprehensive analysis of how well the model performs on your
-    specific data.
-    Requires: Both EDF file AND hypnogram for ground truth comparison
-    """
-    if config not in AVAILABLE_CONFIGS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Invalid configuration '{config}'. "
-                + f"Available: {AVAILABLE_CONFIGS}"
-            )
-        )
-
-    if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="EDF file must have .edf extension"
-        )
-
-    if not hypno_file or not hypno_file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Hypnogram file is required for comprehensive metrics analysis"
-            )
-        )
-
-    logger.info(
-        f"Starting comprehensive prediction + metrics "
-        f"analysis for {edf_file.filename}"
-    )
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        edf_path = os.path.join(temp_dir, edf_file.filename)
-        hypno_path = os.path.join(temp_dir, hypno_file.filename)
-
-        with open(edf_path, "wb") as f:
-            content = await edf_file.read()
-            f.write(content)
-
-        with open(hypno_path, "wb") as f:
-            content = await hypno_file.read()
-            f.write(content)
-
-        try:
-            logger.info(
-                "Step 1/5: Processing uploaded EDF file"
-                " using existing pipeline..."
-            )
-            epochs, annotations_loaded = preprocess_edf_for_api(
-                edf_path, hypno_path
-            )
-
-            if not annotations_loaded:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        "Could not load annotations from hypnogram file "
-                        "- required for metrics analysis"
-                    )
-                )
-
-            logger.info(
-                "Step 2/5: Extracting features and ground truth labels..."
-            )
-            features, feature_names = extract_features_for_config(
-                epochs, config
-            )
-            ground_truth = epochs.events[:, -1]
-
-            logger.info("Step 3/5: Making predictions...")
-            model = load_model(config)
-            predictions = model.predict(features)
-            probabilities = None
-            if hasattr(model, 'predict_proba'):
-                probabilities = model.predict_proba(features)
-
-            logger.info(
-                "Step 4/5: Calculating performance metrics on your file..."
-            )
-            current_file_metrics = evaluate_model_on_data(
-                model, features, ground_truth, config, request
-            )
-
-            logger.info(
-                "Step 5/5: Loading pre-trained metrics for comparison..."
-            )
-            pretrained_metrics = load_pretrained_metrics(config)
-
-            if request and hasattr(request.app.state, 'label_mapping'):
-                label_mapping = request.app.state.label_mapping
-                prediction_labels = [
-                    label_mapping.get(pred, f"Unknown_{pred}")
-                    for pred in predictions
-                ]
-                ground_truth_labels = [
-                    label_mapping.get(gt, f"Unknown_{gt}")
-                    for gt in ground_truth
-                ]
-            else:
-                prediction_labels = [f"Class_{pred}" for pred in predictions]
-                ground_truth_labels = [f"Class_{gt}" for gt in ground_truth]
-
-            comparison_analysis = {}
-            if pretrained_metrics["test_metrics"]:
-                test_acc = pretrained_metrics["test_metrics"][
-                    "overall_metrics"]["accuracy"]
-                test_f1 = pretrained_metrics["test_metrics"][
-                    "overall_metrics"]["macro_f1_score"]
-                current_acc = current_file_metrics["overall_metrics"][
-                    "accuracy"]
-                current_f1 = current_file_metrics["overall_metrics"][
-                    "macro_f1_score"]
-
-                comparison_analysis = {
-                    "accuracy_vs_test_set": {
-                        "your_file": round(current_acc, 4),
-                        "original_test_set": round(test_acc, 4),
-                        "difference": round(current_acc - test_acc, 4),
-                        "performance_category": (
-                            "Better" if current_acc > test_acc
-                            else "Similar"
-                            if abs(current_acc - test_acc) < 0.05 else "Worse"
-                        )
-                    },
-                    "f1_score_vs_test_set": {
-                        "your_file": round(current_f1, 4),
-                        "original_test_set": round(test_f1, 4),
-                        "difference": round(current_f1 - test_f1, 4),
-                        "performance_category": (
-                            "Better" if current_f1 > test_f1
-                            else "Similar"
-                            if abs(current_f1 - test_f1) < 0.05 else "Worse"
-                        )
-                    }
-                }
-
-            confidence_analysis = {}
-            if probabilities is not None:
-                max_probs = np.max(probabilities, axis=1)
-                confidence_analysis = {
-                    "mean_confidence": float(np.mean(max_probs)),
-                    "median_confidence": float(np.median(max_probs)),
-                    "min_confidence": float(np.min(max_probs)),
-                    "max_confidence": float(np.max(max_probs)),
-                    "high_confidence_predictions": int(
-                        np.sum(max_probs > 0.8)
-                    ),
-                    "low_confidence_predictions": int(np.sum(max_probs < 0.5)),
-                    "confidence_distribution": {
-                        "very_high_0.9+": int(np.sum(max_probs >= 0.9)),
-                        "high_0.8-0.9": int(
-                            np.sum((max_probs >= 0.8) & (max_probs < 0.9))
-                        ),
-                        "medium_0.6-0.8": int(
-                            np.sum((max_probs >= 0.6) & (max_probs < 0.8))
-                        ),
-                        "low_0.4-0.6": int(
-                            np.sum((max_probs >= 0.4) & (max_probs < 0.6))
-                        ),
-                        "very_low_<0.4": int(np.sum(max_probs < 0.4))
-                    }
-                }
-
-            unique_pred, counts_pred = np.unique(
-                prediction_labels, return_counts=True
-            )
-            pred_distribution = dict(zip(unique_pred, counts_pred.tolist()))
-
-            unique_true, counts_true = np.unique(
-                ground_truth_labels, return_counts=True
-            )
-            true_distribution = dict(zip(unique_true, counts_true.tolist()))
-
-            total_time_hours = len(predictions) * EPOCH_DURATION / 3600
-            recording_quality = {
-                "total_recording_time_hours": round(total_time_hours, 2),
-                "total_epochs": len(predictions),
-                "epochs_with_annotations": len(ground_truth),
-                "annotation_completeness": (
-                    round(len(ground_truth) / len(predictions), 4)
-                ),
-                "sleep_efficiency": (
-                    round(1 - (
-                        pred_distribution.get("Wake", 0) / len(predictions)
-                    ), 4) if pred_distribution else None
-                )
-            }
-            term1 = current_file_metrics['overall_metrics']['accuracy']
-            term2 = confidence_analysis.get('mean_confidence', 0)
-            term3 = (
-                comparison_analysis.get('accuracy_vs_test_set', {})
-                .get('performance_category', 'Unknown')
-            )
-            return {
-                "model_configuration": config,
-                "file_info": {
-                    "edf_filename": edf_file.filename,
-                    "hypnogram_filename": hypno_file.filename,
-                    "recording_quality": recording_quality
-                },
-                "predictions": {
-                    "predicted_stages": prediction_labels,
-                    "ground_truth_stages": ground_truth_labels,
-                    "prediction_ids": predictions.tolist(),
-                    "ground_truth_ids": ground_truth.tolist(),
-                    "probabilities_per_epoch": (
-                        probabilities.tolist()
-                        if probabilities is not None else None
-                    )
-                },
-                "current_file_performance": current_file_metrics,
-                "pretrained_model_performance": {
-                    "training_metrics": pretrained_metrics[
-                        "training_metrics"
-                    ],
-                    "validation_metrics": pretrained_metrics[
-                        "validation_metrics"
-                    ],
-                    "test_metrics": pretrained_metrics["test_metrics"]
-                },
-                "performance_comparison": comparison_analysis,
-                "confidence_analysis": confidence_analysis,
-                "sleep_analysis": {
-                    "predicted_distribution": pred_distribution,
-                    "actual_distribution": true_distribution,
-                    "stage_agreement_summary": {
-                        stage: {
-                            "predicted_count": pred_distribution.get(
-                                stage, 0
-                            ),
-                            "actual_count": true_distribution.get(
-                                stage, 0
-                            ),
-                            "difference": (
-                                pred_distribution.get(stage, 0) -
-                                true_distribution.get(stage, 0)
-                            )
-                        }
-                        for stage in set(
-                            list(pred_distribution.keys()) +
-                            list(true_distribution.keys())
-                        )
-                    }
-                },
-                "recommendations": {
-                    "model_reliability": (
-                        "High" if current_file_metrics[
-                            "overall_metrics"
-                        ]["accuracy"] > 0.8 else
-                        "Medium" if current_file_metrics[
-                            "overall_metrics"
-                        ]["accuracy"] > 0.6 else "Low"
-                    ),
-                    "confidence_level": (
-                        "High" if confidence_analysis.get(
-                            "mean_confidence", 0
-                        ) > 0.8 else
-                        "Medium" if confidence_analysis.get(
-                            "mean_confidence", 0
-                        ) > 0.6 else "Low"
-                    ),
-                    "clinical_usability": (
-                        "Suitable for clinical review" if (
-                            current_file_metrics[
-                                "overall_metrics"
-                            ]["accuracy"] > 0.75 and
-                            confidence_analysis.get(
-                                "mean_confidence", 0
-                            ) > 0.7
-                        ) else "Requires manual review"
-                    ),
-                    "notes": [
-                        f"Model achieved {term1:.1%} accuracy on your file",
-                        f"Average prediction confidence: {term2:.1%}",
-                        f"Performance vs test set: {term3}"
-                    ]
-                }
-            }
-
-        except Exception as e:
-            logger.error(f"Error in comprehensive metrics pipeline: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error in comprehensive analysis: {str(e)}"
-            )
