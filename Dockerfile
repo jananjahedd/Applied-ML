@@ -13,21 +13,26 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-FROM python:3.9-alpine
+FROM python:3.9-slim-bullseye
 
 WORKDIR /app
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+RUN addgroup --system appgroup && adduser --system --no-create-home --ingroup appgroup appuser
 
 COPY --from=builder /opt/venv /opt/venv
 
 COPY . .
 
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
 ENV PATH="/opt/venv/bin:$PATH"
+
+ENV MPLCONFIGDIR=/app/.cache
 
 EXPOSE 80
 
