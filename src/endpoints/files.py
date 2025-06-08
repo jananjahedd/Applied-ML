@@ -5,7 +5,7 @@ import glob
 from os.path import basename
 from typing import List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Body
 from src.schemas import (
     AvailableFilesResponse,
     SelectedFilesResponse,
@@ -144,7 +144,7 @@ def get_selected_files() -> SelectedFilesResponse:
     """,
     response_model=ResponseMessage
 )
-def select_patient_files(file_ids: List[int]) -> ResponseMessage: # Expect list of integer IDs
+def select_patient_files(file_ids: List[int] = Body(..., embed=True)) -> ResponseMessage: # Expect list of integer IDs
     """Select patient files by their ids from the available files."""
 
     try:
@@ -221,7 +221,7 @@ def select_patient_files(file_ids: List[int]) -> ResponseMessage: # Expect list 
     """,
     response_model=ResponseMessage
 )
-def deselect_patient_files(file_ids: List[int]) -> ResponseMessage:
+def deselect_patient_files(file_ids: List[int] = Body(..., embed=True)) -> ResponseMessage:
     """Deselect patient files by their ids from the selected files."""
     if not file_ids:
         raise HTTPException(
