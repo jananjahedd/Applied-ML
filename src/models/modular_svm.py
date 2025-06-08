@@ -5,42 +5,43 @@ the model, and generates relevant plots.
 """
 
 import pathlib
-import joblib
+import joblib  # type: ignore
 import json
 from collections import defaultdict
 from typing import (Any, DefaultDict,
                     Dict, List, Optional,
                     Set, Tuple, TypedDict, Union)
 
-import numpy as np
-import matplotlib.pyplot as plt
-from numpy.typing import NDArray
-from sklearn.base import BaseEstimator
-from sklearn.decomposition import PCA
-from sklearn.metrics import (
+import numpy as np  # type: ignore
+import matplotlib.pyplot as plt  # type: ignore
+from numpy.typing import NDArray  # type: ignore
+from sklearn.base import BaseEstimator  # type: ignore
+from sklearn.decomposition import PCA  # type: ignore
+from sklearn.metrics import (  # type: ignore
     ConfusionMatrixDisplay,
     accuracy_score,
     classification_report,
+    make_scorer,
     confusion_matrix,
     f1_score,
     roc_auc_score,
 )
-from sklearn.model_selection import GridSearchCV, learning_curve
-from sklearn.pipeline import Pipeline as SklearnPipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from sklearn.utils import shuffle
+from sklearn.model_selection import (GridSearchCV,  # type: ignore
+                                     learning_curve,
+                                     StratifiedKFold)
+from sklearn.pipeline import Pipeline as SklearnPipeline  # type: ignore
+from sklearn.preprocessing import StandardScaler  # type: ignore
+from sklearn.svm import SVC  # type: ignore
+from sklearn.utils import shuffle  # type: ignore
 
 from src.utils.paths import (get_splits_data,
                              get_repo_root,
                              get_results_dir)
 from src.utils.logger import get_logger
-
-try:
-    import pandas as pd
-    pandas_available = True
-except ImportError:
-    pandas_available = False
+from sklearn.calibration import CalibratedClassifierCV  # type: ignore
+from sklearn.multiclass import OneVsRestClassifier  # type: ignore
+from sklearn.metrics import roc_curve, auc  # type: ignore
+from sklearn.feature_selection import SelectKBest, f_classif  # type: ignore
 
 try:
     from imblearn.over_sampling import SMOTE  # type: ignore
@@ -67,6 +68,13 @@ RESULTS_DIR = pathlib.Path(get_results_dir())
 
 # Define configurations to run SVM on
 CONFIGS_TO_RUN = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
+
+# global stratified CV
+stratified_kfold = StratifiedKFold(
+    n_splits=5,
+    shuffle=True,
+    random_state=42
+)
 
 
 class ResultMetrics(TypedDict):
@@ -243,15 +251,26 @@ def _build_svm_pipeline(
         svm_pipeline_steps.append(("smote", SMOTE_class_ref(random_state=42)))
 
     svm_pipeline_steps.append(
-        ("svm", SVC(
-            kernel="rbf", probability=True,
-            random_state=42, class_weight="balanced"
-            ))
+        (
+            'feature_selection',
+            SelectKBest(score_func=f_classif,
+                        k=20 if n_features > 20 else 'all')
+        )
     )
+    calibrated_svc = CalibratedClassifierCV(
+        estimator=SVC(
+            kernel='rbf',
+            probability=True,
+            class_weight='balanced',
+            random_state=42
+        ),
+        cv=stratified_kfold,
+        method='sigmoid'
+    )
+    svm_pipeline_steps.append(('svc', calibrated_svc))
 
-    CurrentPipeline = (ImbPipeline if "smote" in dict(svm_pipeline_steps)
-                       else SklearnPipeline)  # type: ignore
-    return CurrentPipeline(svm_pipeline_steps)
+    pipeline = ImbPipeline(svm_pipeline_steps)
+    return pipeline
 
 
 def _train_svm_model_with_gridsearch(
@@ -299,7 +318,7 @@ def _train_svm_model_with_gridsearch(
         k_val = min(5, min_samples_class - 1) if min_samples_class > 1 else 1
         if k_val == 0 and min_samples_class == 1:
             logger.warning(
-                f"Min samples per class is 1. SMOTE cannot be applied with "
+                "Min samples per class is 1. SMOTE cannot be applied with "
                 "k_neighbors=0. Removing SMOTE."
             )
             original_steps = pipeline.steps
@@ -350,9 +369,23 @@ def _train_svm_model_with_gridsearch(
             )
         return best_estimator, None
 
+    scoring = {
+        "accuracy": "accuracy",
+        'roc_auc_ovr': make_scorer(
+            roc_auc_score,
+            multi_class='ovr',
+            average='macro',
+            needs_proba=True
+        )
+    }
     gs = GridSearchCV(
-        pipeline, param_grid, cv=n_splits_cv, scoring="f1_macro",
-        n_jobs=-1, error_score="raise", refit=True
+        estimator=pipeline,
+        param_grid=param_grid,
+        scoring=scoring,
+        refit='roc_auc_ovr',
+        cv=stratified_kfold,
+        return_train_score=True,
+        n_jobs=-1,
     )
     try:
         logger.info(f"Starting GridSearchCV with cv={n_splits_cv}...")
@@ -462,6 +495,15 @@ def _evaluate_model(
                     y_set, y_proba, multi_class="ovr", average="macro",
                     labels=roc_auc_calc_labels
                 )
+                roc_plot_path = (
+                    results_dir /
+                    f"roc_{fusion_config_key}_{set_name.lower()}.png"
+                )
+                plot_roc_curves(
+                    estimator, X_set, y_set, sorted_labels, roc_plot_path
+                )
+                logger.info(f"ROC curves saved to: {roc_plot_path}")
+
             except ValueError as roc_e:
                 logger.warning(
                     f"({set_name} set, config {fusion_config_key}) "
@@ -506,8 +548,12 @@ def _evaluate_model(
         if cm_data is not None:
             logger.info(
                 f"Confusion Matrix ({set_name} - Config: "
-                f"{fusion_config_key}):\n{cm_data}")
-            cm_save_path = results_dir / f"cm_{fusion_config_key}_{set_name.lower().replace(' ', '_')}.png"
+                f"{fusion_config_key}):\n{cm_data}"
+            )
+            cm_save_path = (
+                results_dir /
+                f"cm_{fusion_config_key}_{set_name.lower().replace(' ', '_')}.png"
+            )
             plot_confusion_matrix(
                 cm_data, display_labels,
                 f"CM - {fusion_config_key} - {set_name}",
@@ -662,8 +708,15 @@ def plot_learning_curve(
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
         train_sizes_abs, train_scores, val_scores = learning_curve(
-            estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes,
-            scoring="accuracy", error_score=np.nan
+            estimator, X, y, cv=stratified_kfold, n_jobs=n_jobs,
+            train_sizes=train_sizes,
+            scoring=make_scorer(
+                roc_auc_score,
+                multi_class="ovr",
+                average="macro",
+                needs_proba=True
+            ),
+            error_score=np.nan
         )
         train_scores_mean = np.nanmean(train_scores, axis=1)
         train_scores_std = np.nanstd(train_scores, axis=1)
@@ -845,6 +898,48 @@ def plot_grid_search_results(
         )
 
 
+def plot_roc_curves(
+    estimator: BaseEstimator,
+    X: NDArray[np.float64],
+    y: NDArray[np.int_],
+    labels: List[int],
+    save_path: pathlib.Path
+) -> None:
+    """One-Vs-Rest ROC curves and macro-avg."""
+    ovr = OneVsRestClassifier(estimator)
+    y_score = ovr.fit(X, y).predict_proba(X)
+
+    # compute per-class ROC
+    fpr, tpr, roc_auc = {}, {}, {}
+    for i, lab in enumerate(labels):
+        fpr[i], tpr[i], _ = roc_curve((y == lab).astype(int), y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    # macro-average
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in labels]))
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in labels:
+        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+    mean_tpr /= len(labels)
+    fpr["macro"], tpr["macro"] = all_fpr, mean_tpr
+    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for i, lab in enumerate(labels):
+        ax.plot(fpr[i], tpr[i], lw=1,
+                label=f"Class {lab} (AUC = {roc_auc[i]:.2f})")
+    ax.plot(fpr["macro"], tpr["macro"], 'k--',
+            label=f"Macro-AUC = {roc_auc['macro']:.2f}", lw=2)
+
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("ROC Curves")
+    ax.legend(loc="lower right")
+    plt.tight_layout()
+    fig.savefig(save_path)
+    plt.close(fig)
+
+
 def _convert_to_json_serializable(item: Any) -> Any:
     """Recursively converts items in a dictionary or list for JSON.
 
@@ -991,20 +1086,43 @@ def main_svm() -> None:
                         if best_svm_estimator:
                             # evaluate on Training set
                             train_acc, train_f1, train_roc, train_report = _evaluate_model(
-                                best_svm_estimator, X_train, y_train, master_label_set, "Training", fusion_config_key, RESULTS_DIR)
-                            current_config_results["train_accuracy"].append(train_acc)
-                            current_config_results["train_f1_macro"].append(train_f1)
-                            current_config_results["train_roc_auc_ovr"].append(train_roc)
-                            current_config_results["train_classification_report"].append(train_report)
+                                best_svm_estimator, X_train, y_train,
+                                master_label_set, "Training",
+                                fusion_config_key, RESULTS_DIR
+                            )
+                            current_config_results["train_accuracy"].append(
+                                train_acc
+                            )
+                            current_config_results["train_f1_macro"].append(
+                                train_f1
+                            )
+                            current_config_results["train_roc_auc_ovr"].append(
+                                train_roc
+                            )
+                            current_config_results[
+                                "train_classification_report"].append(
+                                    train_report
+                                )
 
                             # evaluate on Validation set
                             if X_val is not None and y_val is not None and X_val.size > 0:
                                 val_acc, val_f1, val_roc, val_report = _evaluate_model(
-                                    best_svm_estimator, X_val, y_val, master_label_set, "Validation", fusion_config_key, RESULTS_DIR)
-                                current_config_results["val_accuracy"].append(val_acc)
-                                current_config_results["val_f1_macro"].append(val_f1)
-                                current_config_results["val_roc_auc_ovr"].append(val_roc)
-                                current_config_results["val_classification_report"].append(val_report)
+                                    best_svm_estimator, X_val, y_val,
+                                    master_label_set, "Validation",
+                                    fusion_config_key, RESULTS_DIR
+                                )
+                                current_config_results["val_accuracy"].append(
+                                    val_acc
+                                )
+                                current_config_results["val_f1_macro"].append(
+                                    val_f1
+                                )
+                                current_config_results[
+                                    "val_roc_auc_ovr"].append(val_roc)
+                                current_config_results[
+                                    "val_classification_report"].append(
+                                        val_report
+                                    )
                             else:
                                 current_config_results["val_accuracy"].append(np.nan)
                                 current_config_results["val_f1_macro"].append(np.nan)
