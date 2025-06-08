@@ -105,11 +105,11 @@ def get_available_files() -> AvailableFilesResponse:
 )
 def get_selected_files() -> SelectedFilesResponse:
     """Get list of currently selected patient files."""
-    if not selected_filenames:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No files selected. Use POST /files/select to select files first."
-        )
+    # if not selected_filenames:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND,
+    #         detail="No files selected. Use POST /files/select to select files first."
+    #     )
 
     return SelectedFilesResponse(
         selected_files=selected_filenames,
