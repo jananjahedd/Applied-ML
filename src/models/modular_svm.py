@@ -267,7 +267,7 @@ def _build_svm_pipeline(
         cv=stratified_kfold,
         method='sigmoid'
     )
-    svm_pipeline_steps.append(('svc', calibrated_svc))
+    svm_pipeline_steps.append(('svm', calibrated_svc))
 
     pipeline = ImbPipeline(svm_pipeline_steps)
     return pipeline
@@ -375,7 +375,7 @@ def _train_svm_model_with_gridsearch(
             roc_auc_score,
             multi_class='ovr',
             average='macro',
-            needs_proba=True
+            needs_threshold=True
         )
     }
     gs = GridSearchCV(
@@ -714,7 +714,7 @@ def plot_learning_curve(
                 roc_auc_score,
                 multi_class="ovr",
                 average="macro",
-                needs_proba=True
+                needs_threshold=True
             ),
             error_score=np.nan
         )
@@ -1061,9 +1061,9 @@ def main_svm() -> None:
                             X_hp_train_svm, y_hp_train_svm, random_state=42
                         )
                         svm_param_grid = {
-                            "svm__C": [0.1, 1, 10, 50, 100],
-                            "svm__gamma": [1e-5, 1e-4, 1e-3, 1e-2, 0.1,
-                                           "scale", "auto"],
+                            "svm__estimator__C": [0.1, 1, 10, 50, 100],
+                            "svm__estimator__gamma": [1e-5, 1e-4, 1e-3, 1e-2, 0.1,
+                                                      "scale", "auto"],
                         }
                         best_svm_estimator, cv_results = (
                             _train_svm_model_with_gridsearch(
@@ -1077,8 +1077,8 @@ def main_svm() -> None:
                         )
                         if cv_results:
                             plot_grid_search_results(
-                                cv_results, param_C="svm__C",
-                                param_gamma="svm__gamma",
+                                cv_results, param_C="svm__estimator__C",
+                                param_gamma="svm__estimator__gamma",
                                 title=f"GridSearchCV Results - {fusion_config_key}",
                                 save_path=gs_plot_save_path
                             )
