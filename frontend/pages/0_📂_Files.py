@@ -5,13 +5,13 @@ import requests
 FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
-    page_title="EDF File Selector & Manager",
+    page_title="EDF File Selector 📂",
     layout="centered",
     initial_sidebar_state="expanded",
     page_icon="📂",
 )
 
-st.title("EDF File Selector & Current Selection")
+st.title("EDF File Selector")
 
 
 def get_available_files_from_api():
@@ -72,7 +72,12 @@ def deselect_files_via_api(file_ids: list):
         return None
 
 
-# Section 1: Display available EDF files 
+# Section 1: Display available EDF files
+
+st.markdown("""
+Below you can see the available files you can select from for processing.
+""")
+
 available_files = get_available_files_from_api()
 
 st.header("Available EDF Files on Server")
@@ -93,7 +98,10 @@ if available_files:
 else:
     st.warning("Could not retrieve available files. Check FastAPI server.")
 
-# Section 2: Select files 
+
+st.divider()
+
+# Section 2: Select files
 
 st.header("Select Files for Processing")
 
@@ -123,3 +131,50 @@ if st.button("Select Files"):
             st.error("Failed to select files")
     else:
         st.warning("Please select at least one file ID.")
+
+# Section 3: Display currently selected files
+
+st.divider()
+st.header("Currently Selected Files")
+
+st.markdown("""
+To doublecheck your selection, you can use the "View Selected Files" button.
+""")
+
+selected_files = get_selected_files_from_api()
+
+if st.button("View Selected Files"):
+    if selected_files:
+        for file_id, filename in selected_files.get("selected_files", {}).items():
+            st.write(f"**ID {file_id}:** {filename}")
+        st.write(f"Total Selected Files: {selected_files.get('total_selected', 0)}")
+    else:
+        st.warning("No files currently selected or could not retrieve selected files.")
+
+
+# Section 4: Deselect files
+
+st.divider()
+
+st.header("Deselect Files")
+
+st.markdown(""" If you want to remove files from your selection, you can do so by choosing their IDs below.""")
+
+if selected_files:
+    selected_file_ids = list(selected_files["selected_files"].keys())
+    deselect_ids = st.multiselect(
+        "Select File IDs to Deselect",
+        options=selected_file_ids,
+    )
+    if st.button("Deselect Files"):
+        if deselect_ids:
+            int_deselect_ids = [int(id) for id in deselect_ids]
+            response = deselect_files_via_api(int_deselect_ids)
+            if response:
+                st.success("Deselection complete")
+            else:
+                st.error("There was an error deselecting files.")
+        else:
+            st.warning("Please select at least one file ID to proceed.")
+else:
+    st.warning("No files are currently selected ")

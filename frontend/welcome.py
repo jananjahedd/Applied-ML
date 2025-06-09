@@ -11,3 +11,5 @@ st.title("Welcome to our Sleep Stage Prediction App! 👋")
 st.markdown("""
 This application allows you to choose data in EDF format and get predictions on your sleep stages using pre-trained SVM models.
 """)
+
+st.sidebar.success("Select a page above.")
