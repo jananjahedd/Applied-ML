@@ -8,6 +8,7 @@ import numpy as np
 import mne
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request, status
 from sklearn.pipeline import Pipeline as SklearnPipeline
+from src.endpoints.files import selected_filenames
 
 from src.schemas import (
     ResponseMessage,
@@ -535,190 +536,188 @@ def extract_dataset_metrics(section: str, dataset_type: str, config: str) -> Opt
 
 @router.post("/predict-edf", response_model=PredictEDFResponse)
 async def predict_edf_file(
-    edf_file: UploadFile = File(..., description="EDF sleep recording file"),
+    request: Request,
+    edf_file: Optional[UploadFile] = File(None, description="EDF sleep recording file"),
     hypno_file: Optional[UploadFile] = File(
         None, description="Optional hypnogram file for better epoch creation"
     ),
     config: str = DEFAULT_CONFIG,
-    request: Request = None
+    edf_path_internal: Optional[str] = None
 ):
     """
-    Complete Automated Sleep Stage Prediction Pipeline
-
+    Complete Automated Sleep Stage Prediction Pipeline.
+    This endpoint can be triggered by a direct file upload or internally with a server file path.
     Model Performance (Validation Set):
-    - Accuracy: ~60% vs 20% random guessing (5-class problem)
-    - Tested on 10 subjects
-    - Significantly outperforms random classification
+#     - Accuracy: ~60% vs 20% random guessing (5-class problem)
+#     - Tested on 10 subjects
+#     - Significantly outperforms random classification
 
-    Just upload your EDF file and get sleep stage predictions!
+#     Just upload or select your EDF file and get sleep stage predictions!
 
-    This endpoint automatically:
-    1. Uploads and validates your EDF file
-    2. Preprocesses using proven clinical pipeline
-    3. Extracts sleep-relevant features from EEG/EOG/EMG
-    4. Predicts sleep stages using trained SVM models
-    5. Returns detailed predictions with confidence scores
+#     This endpoint automatically:
+#     1. Uploads and validates your EDF file
+#     2. Preprocesses using proven clinical pipeline
+#     3. Extracts sleep-relevant features from EEG/EOG/EMG
+#     4. Predicts sleep stages using trained SVM models
+#     5. Returns detailed predictions with confidence scores
 
-    Input: EDF file (+ optional hypnogram)
-    Output: Sleep stage predictions for every 30-second epoch
+#     Input: EDF file (+ optional hypnogram)
+#     Output: Sleep stage predictions for every 30-second epoch
 
-    Supported configurations:
-    - `eeg`: EEG channels only
-    - `eeg_emg`: EEG + EMG (good for REM detection)
-    - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
-    - `eeg_emg_eog`: All channels (most comprehensive, default)
+#     Supported configurations:
+#     - `eeg`: EEG channels only
+#     - `eeg_emg`: EEG + EMG (good for REM detection)
+#     - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
+#     - `eeg_emg_eog`: All channels (most comprehensive, default)
     """
-    if config not in AVAILABLE_CONFIGS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Invalid configuration '{config}'. "
-                + f"Available: {AVAILABLE_CONFIGS}"
-            )
-        )
+    edf_path = edf_path_internal
+    hypno_path = None
+    input_filename = ""
+    temp_dir_manager = tempfile.TemporaryDirectory()
+    temp_dir = temp_dir_manager.name
 
-    if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an EDF file with .edf extension"
-        )
+    try:
+        if edf_path:
+            input_filename = os.path.basename(edf_path)
+            # If a hypnogram is provided with an internal edf, it must also be a path
+            # (This logic assumes hypno_file is an UploadFile, adjust if needed)
+            if hypno_file and hypno_file.filename:
+                hypno_path = os.path.join(temp_dir, hypno_file.filename)
+                with open(hypno_path, "wb") as f:
+                    content = await hypno_file.read()
+                    f.write(content)
 
-    file_size_mb = edf_file.size / (1024 * 1024) if edf_file.size else 0
-    if file_size_mb > 500:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=(
-                f"File too large ({file_size_mb:.1f}MB). "
-                + "Maximum size is 500MB."
-            )
-        )
-
-    logger.info(
-        f"Starting automated prediction pipeline for {edf_file.filename}"
-        f" using {config} configuration"
-    )
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        edf_path = os.path.join(temp_dir, edf_file.filename)
-        hypno_path = None
-
-        logger.info("Saving uploaded files...")
-        with open(edf_path, "wb") as f:
-            content = await edf_file.read()
-            f.write(content)
-
-        if hypno_file and hypno_file.filename:
-            hypno_path = os.path.join(temp_dir, hypno_file.filename)
-            with open(hypno_path, "wb") as f:
-                content = await hypno_file.read()
-                f.write(content)
-            logger.info(f"Hypnogram file provided: {hypno_file.filename}")
-
-        try:
-            logger.info(
-                "Step 1/4: Preprocessing EDF data using existing pipeline..."
-            )
-            epochs, annotations_loaded = preprocess_edf_for_api(
-                edf_path, hypno_path
-            )
-            logger.info(
-                f"Preprocessing complete. Created {len(epochs)} epochs"
-                f" of {EPOCH_DURATION}s each"
-            )
-
-            logger.info(
-                f"Step 2/4: Extracting features for {config} configuration..."
-            )
-            features, feature_names = extract_features_for_config(
-                epochs, config
-            )
-            logger.info(
-                f"Feature extraction complete. Extracted "
-                f" {features.shape[1]} features per epoch"
-            )
-
-            logger.info(
-                "Step 3/4: Loading trained model and making predictions..."
-            )
-            model = load_model(config)
-            predictions = model.predict(features)
-            logger.info(f"Predictions complete for {len(predictions)} epochs")
-
-            logger.info(
-                "Step 4/4: Generating confidence scores"
-                " and formatting results..."
-            )
-            probabilities_per_segment = None
-            if hasattr(model, 'predict_proba'):
-                probabilities_per_segment = model.predict_proba(
-                    features).tolist()
-
-            if request and hasattr(request.app.state, 'label_mapping'):
-                label_mapping = request.app.state.label_mapping
-                prediction_labels = [
-                    label_mapping.get(pred, f"Unknown_{pred}")
-                    for pred in predictions
-                ]
-                class_labels_legend = label_mapping
-            else:
-                prediction_labels = [f"Class_{pred}" for pred in predictions]
-                class_labels_legend = None
-
-            unique_stages, counts = np.unique(
-                prediction_labels, return_counts=True
-            )
-            stage_distribution = dict(zip(unique_stages, counts.tolist()))
-            total_time_hours = len(predictions) * EPOCH_DURATION / 3600
-
-            current_file_metrics = None
-            if annotations_loaded and hasattr(epochs, 'events') and \
-                    epochs.events is not None:
-                logger.info(
-                    "Ground truth available - calculating performance"
-                    " metrics on current file..."
+        elif edf_file:
+            if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="File must be an EDF file with .edf extension"
                 )
-                try:
-                    ground_truth = epochs.events[:, -1]
-                    current_file_metrics = evaluate_model_on_data(
-                        model, features, ground_truth, config, request
-                    )
-                    current_file_metrics["note"] = (
-                        "Performance metrics calculated on the uploaded"
-                        + " file with ground truth annotations"
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Could not calculate metrics on current file: {e}"
-                    )
+            input_filename = edf_file.filename
+            edf_path = os.path.join(temp_dir, input_filename)
+            with open(edf_path, "wb") as f:
+                content = await edf_file.read()
+                f.write(content)
 
-            logger.info("Complete pipeline finished successfully!")
-            logger.info(f"Sleep stage distribution: {stage_distribution}")
-            logger.info(f"Total recording time: {total_time_hours:.1f} hours")
-
-            return PredictEDFResponse(
-                model_configuration_used=config,
-                input_file_name=edf_file.filename,
-                num_segments_processed=len(predictions),
-                predictions=prediction_labels,
-                prediction_ids=predictions.tolist(),
-                probabilities_per_segment=probabilities_per_segment,
-                class_labels_legend=class_labels_legend,
-                processing_summary={
-                    "total_recording_time_hours": round(total_time_hours, 2),
-                    "epoch_duration_seconds": EPOCH_DURATION,
-                    "annotations_from_hypnogram": annotations_loaded,
-                    "features_extracted_per_epoch": features.shape[1],
-                    "sleep_stage_distribution": stage_distribution,
-                    "current_file_performance": current_file_metrics
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"Error in complete EDF prediction pipeline: {e}")
+            if hypno_file and hypno_file.filename:
+                hypno_path = os.path.join(temp_dir, hypno_file.filename)
+                with open(hypno_path, "wb") as f:
+                    content = await hypno_file.read()
+                    f.write(content)
+        else:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error in prediction pipeline: {str(e)}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No EDF file or internal path provided."
             )
+
+        logger.info(
+            f"Starting automated prediction pipeline for {input_filename} using {config} configuration"
+        )
+
+        logger.info("Step 1/4: Preprocessing EDF data...")
+        epochs, annotations_loaded = preprocess_edf_for_api(edf_path, hypno_path)
+        logger.info(f"Preprocessing complete. Created {len(epochs)} epochs of {EPOCH_DURATION}s each.")
+
+        logger.info(f"Step 2/4: Extracting features for {config} configuration...")
+        features, feature_names = extract_features_for_config(epochs, config)
+        logger.info(f"Feature extraction complete. Extracted {features.shape[1]} features per epoch.")
+
+        logger.info("Step 3/4: Loading trained model and making predictions...")
+        model = load_model(config)
+        predictions = model.predict(features)
+        logger.info(f"Predictions complete for {len(predictions)} epochs.")
+
+        logger.info("Step 4/4: Generating confidence scores and formatting results...")
+        probabilities_per_segment = None
+        if hasattr(model, 'predict_proba'):
+            probabilities_per_segment = model.predict_proba(features).tolist()
+
+        if hasattr(request.app.state, 'label_mapping'):
+            label_mapping = request.app.state.label_mapping
+            prediction_labels = [label_mapping.get(pred, f"Unknown_{pred}") for pred in predictions]
+            class_labels_legend = label_mapping
+        else:
+            prediction_labels = [f"Class_{pred}" for pred in predictions]
+            class_labels_legend = None
+
+        unique_stages, counts = np.unique(prediction_labels, return_counts=True)
+        stage_distribution = dict(zip(unique_stages, counts.tolist()))
+        total_time_hours = len(predictions) * EPOCH_DURATION / 3600
+
+        current_file_metrics = None
+        if annotations_loaded and hasattr(epochs, 'events') and epochs.events is not None:
+            logger.info("Ground truth available - calculating performance metrics on current file...")
+            try:
+                ground_truth = epochs.events[:, -1]
+                current_file_metrics = evaluate_model_on_data(model, features, ground_truth, config, request)
+                current_file_metrics["note"] = "Performance metrics calculated on the uploaded file with ground truth annotations."
+            except Exception as e:
+                logger.warning(f"Could not calculate metrics on current file: {e}")
+
+        logger.info("Complete pipeline finished successfully!")
+        logger.info(f"Sleep stage distribution: {stage_distribution}")
+        logger.info(f"Total recording time: {total_time_hours:.1f} hours")
+
+        return PredictEDFResponse(
+            model_configuration_used=config,
+            input_file_name=input_filename,
+            num_segments_processed=len(predictions),
+            predictions=prediction_labels,
+            prediction_ids=predictions.tolist(),
+            probabilities_per_segment=probabilities_per_segment,
+            class_labels_legend=class_labels_legend,
+            processing_summary={
+                "total_recording_time_hours": round(total_time_hours, 2),
+                "epoch_duration_seconds": EPOCH_DURATION,
+                "annotations_from_hypnogram": annotations_loaded,
+                "features_extracted_per_epoch": features.shape[1],
+                "sleep_stage_distribution": stage_distribution,
+                "current_file_performance": current_file_metrics
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error in complete EDF prediction pipeline: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error in prediction pipeline: {str(e)}"
+        )
+    finally:
+        temp_dir_manager.cleanup()
+
+
+@router.post("/predict-selected-file/{file_id}", response_model=PredictEDFResponse)
+async def predict_selected_file(
+    file_id: str,
+    request: Request,
+    config: str = DEFAULT_CONFIG
+):
+    """
+    Triggers the prediction pipeline for a file that has been pre-selected
+    using the /files/select endpoint.
+    """
+    if file_id not in selected_filenames:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File ID '{file_id}' not found in selected files. Please select the file first via POST /files/select."
+        )
+
+    file_path_to_process = selected_filenames[file_id]
+
+    if not os.path.exists(file_path_to_process):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found on server at path: {file_path_to_process}"
+        )
+
+    # use file path directly instead of UploadFile
+    return await predict_edf_file(
+        request=request,
+        config=config,
+        edf_file=None,  # No file upload
+        hypno_file=None,  # No hypnogram upload
+        edf_path_internal=file_path_to_process
+    )
 
 
 @router.get("/all-performance/{config}", response_model=Dict[str, Any])
