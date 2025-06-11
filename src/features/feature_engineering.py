@@ -5,11 +5,10 @@ Extracts the features from the preprocessed data.
 
 from typing import List, Tuple
 
-import mne
-import numpy as np
-from numpy.typing import NDArray
-from sklearn.preprocessing import StandardScaler
-from sklearn.exceptions import NotFittedError
+import mne  # type: ignore
+import numpy as np  # type: ignore
+from numpy.typing import NDArray  # type: ignore
+from sklearn.exceptions import NotFittedError  # type: ignore
 
 from src.utils.logger import get_logger
 
@@ -44,7 +43,6 @@ class FeatureEngineering:
 
     def __init__(self) -> None:
         """Initialize the feature engineering class."""
-        self.scaler_: StandardScaler | None = None
         self.feature_names_: List[str] = []
 
     def _calculate_sef(
@@ -300,19 +298,13 @@ class FeatureEngineering:
         :param epochs_train: the MNE Epochs object for the training set.
         :return: a tuple of (scaled_features, labels, feature_names).
         """
-        logger.info("Fitting the scaler on the training data.")
+        logger.info("Extracting features from training data.")
 
         # extract raw features
         X_train, y_train, feature_names = self._extract_features(epochs_train)
         self.feature_names_ = feature_names
 
-        self.scaler_ = StandardScaler()
-        self.scaler_.fit(X_train)
-        logger.info("Scaler has been fitted.")
-
-        X_train_scaled = self.scaler_.transform(X_train)
-
-        return X_train_scaled, y_train, self.feature_names_
+        return X_train, y_train, self.feature_names_
 
     def transform(self,
                   epochs: mne.Epochs
@@ -325,18 +317,15 @@ class FeatureEngineering:
         :param epochs: the MNE Epochs object to transform (val and test sets)
         :return: a tuple of (scaled_features, labels).
         """
-        if self.scaler_ is None:
+        if not self.feature_names_:
             raise NotFittedError(
-                "This FeatureEngineering instance is not fitted yet."
-                + "Call 'fit' with training data before using 'transform'."
+                "This FeatureEngineering instance is not fitted yet. "
+                "Call 'fit' with training data before using 'transform'."
             )
 
-        logger.info(f"Transforming {len(epochs)} new epochs.")
-
+        logger.info(f"Transforming {len(epochs)} new epochs (no scaling).")
         X_raw, y, _ = self._extract_features(epochs)
-        X_scaled = self.scaler_.transform(X_raw)
-
-        return X_scaled, y
+        return X_raw, y
 
 
 """

@@ -14,6 +14,7 @@ from typing import (Any, DefaultDict,
 
 import numpy as np  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
+from scipy.stats import uniform, randint  # type: ignore
 from numpy.typing import NDArray  # type: ignore
 from sklearn.base import BaseEstimator  # type: ignore
 from sklearn.decomposition import PCA  # type: ignore
@@ -26,7 +27,7 @@ from sklearn.metrics import (  # type: ignore
     f1_score,
     roc_auc_score,
 )
-from sklearn.model_selection import (GridSearchCV,  # type: ignore
+from sklearn.model_selection import (RandomizedSearchCV,  # type: ignore
                                      learning_curve,
                                      StratifiedKFold)
 from sklearn.pipeline import Pipeline as SklearnPipeline  # type: ignore
@@ -35,13 +36,13 @@ from sklearn.svm import SVC  # type: ignore
 from sklearn.utils import shuffle  # type: ignore
 
 from src.utils.paths import (get_splits_data,
-                             get_repo_root,
-                             get_results_dir)
+                             get_repo_root)
 from src.utils.logger import get_logger
 from sklearn.calibration import CalibratedClassifierCV  # type: ignore
 from sklearn.multiclass import OneVsRestClassifier  # type: ignore
 from sklearn.metrics import roc_curve, auc  # type: ignore
 from sklearn.feature_selection import SelectKBest, f_classif  # type: ignore
+from sklearn.base import clone  # type: ignore
 
 try:
     from imblearn.over_sampling import SMOTE  # type: ignore
@@ -64,7 +65,8 @@ logger = get_logger("svm")
 
 PROJECT_ROOT = pathlib.Path(get_repo_root())
 SPLITS_DIR = pathlib.Path(get_splits_data())
-RESULTS_DIR = pathlib.Path(get_results_dir())
+RESULTS_DIR = PROJECT_ROOT / "results5"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Define configurations to run SVM on
 CONFIGS_TO_RUN = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
@@ -242,6 +244,13 @@ def _build_svm_pipeline(
         raise ValueError("X_train_svm for pipeline building has 0 features.")
 
     svm_pipeline_steps: List[Tuple[str, Any]] = [("scaler", StandardScaler())]
+    svm_pipeline_steps.append(
+        (
+            'feature_selection',
+            SelectKBest(score_func=f_classif,
+                        k=20 if n_features > 20 else 'all')
+        )
+    )
     if n_features > 10:
         svm_pipeline_steps.append(
             ("pca", PCA(n_components=0.95, random_state=42))
@@ -250,13 +259,6 @@ def _build_svm_pipeline(
     if imblearn_available_flag and SMOTE_class_ref is not None:
         svm_pipeline_steps.append(("smote", SMOTE_class_ref(random_state=42)))
 
-    svm_pipeline_steps.append(
-        (
-            'feature_selection',
-            SelectKBest(score_func=f_classif,
-                        k=20 if n_features > 20 else 'all')
-        )
-    )
     calibrated_svc = CalibratedClassifierCV(
         estimator=SVC(
             kernel='rbf',
@@ -273,16 +275,16 @@ def _build_svm_pipeline(
     return pipeline
 
 
-def _train_svm_model_with_gridsearch(
+def _train_svm_with_randomizedsearch(
     pipeline: Union[SklearnPipeline, ImbPipeline],  # type: ignore
-    param_grid: Dict[str, Any],
+    param_dist: Dict[str, Any],
     X_hp_train: NDArray[np.float64],
     y_hp_train: NDArray[np.int_],
 ) -> Tuple[Optional[BaseEstimator], Optional[Dict[str, Any]]]:
     """Trains the SVM with GridSearch.
 
     :param pipeline: the built pipeline.
-    :param param_grid: dictionary containing the parameters.
+    :param param_dist: dictionary containing the parameters.
     :param X_hp_train: the training data.
     :param y_hp_train: the labels of the training data.
     :return: tuple containing the best model and the results from
@@ -295,7 +297,7 @@ def _train_svm_model_with_gridsearch(
     if X_hp_train.shape[0] < 5 or len(unique_y_classes) < 2:
         logger.warning(
             f"Combined train+val for SVM too small (shape {X_hp_train.shape},"
-            f" {len(unique_y_classes)} classes) for GridSearchCV. "
+            f" {len(unique_y_classes)} classes) for RandomizedSearchCV. "
             "Fitting pipeline directly."
         )
         try:
@@ -313,50 +315,46 @@ def _train_svm_model_with_gridsearch(
         f"Min samples per class in HP tuning data: {min_samples_class}"
     )
 
+    n_splits_cv = (
+        min(stratified_kfold.get_n_splits(), min_samples_class)
+        if min_samples_class >= 2 else 2
+    )
+
     current_pipeline_dict = dict(pipeline.steps)
     if "smote" in current_pipeline_dict and SMOTE is not None:
-        k_val = min(5, min_samples_class - 1) if min_samples_class > 1 else 1
-        if k_val == 0 and min_samples_class == 1:
+        smallest_train_fold_size = min_samples_class - int(np.ceil(min_samples_class / n_splits_cv))
+
+        if smallest_train_fold_size > 1:
+            k_val = smallest_train_fold_size - 1
+            try:
+                pipeline.set_params(smote__k_neighbors=k_val)
+                logger.info(
+                    f"SMOTE k_neighbors robustly set to: {k_val} based "
+                    f"on n_splits={n_splits_cv}"
+                )
+            except ValueError as e:
+                logger.warning(f"Could not set smote__k_neighbors: {e}")
+        else:
             logger.warning(
-                "Min samples per class is 1. SMOTE cannot be applied with "
-                "k_neighbors=0. Removing SMOTE."
+                "Smallest class size in a training fold "
+                f"({smallest_train_fold_size}) is too small for SMOTE. "
+                "Removing SMOTE from the pipeline for this run."
             )
             original_steps = pipeline.steps
             steps_no_smote = [(name, step) for name, step in original_steps
                               if name != "smote"]
-            # determine if ImbPipeline is still needed
-            is_still_imblearn = any(
-                isinstance(step, (SMOTE.__class__ if SMOTE else object))
-                for name, step in steps_no_smote if name != 'smote'
-            )
-            NewPipelineType = (ImbPipeline if is_still_imblearn and
-                               imblearn_available else SklearnPipeline)
-            pipeline = NewPipelineType(steps_no_smote)
-        elif k_val >= 1:
-            try:
-                if 'smote__k_neighbors' in pipeline.get_params().keys():
-                    pipeline.set_params(smote__k_neighbors=k_val)
-                    logger.info(f"SMOTE k_neighbors set to: {k_val}")
-                else:
-                    logger.warning(
-                        "Could not find 'smote__k_neighbors' in pipeline "
-                        "params. SMOTE k_val not set."
-                    )
-            except ValueError as e:
-                logger.warning(
-                    f"Could not set smote__k_neighbors (k_val={k_val}), "
-                    f"SMOTE might have issues: {e}")
-        else:
-            logger.warning(
-                f"Calculated k_val for SMOTE is {k_val}. "
-                "SMOTE might be ineffective or error."
-            )
 
-    n_splits_cv = min(5, min_samples_class) if min_samples_class >= 2 else 2
+            is_still_imblearn = any(
+                'imblearn' in str(type(step)) for name, step in steps_no_smote
+            )
+            NewPipelineType = ImbPipeline if is_still_imblearn and imblearn_available else SklearnPipeline
+            pipeline = NewPipelineType(steps_no_smote)
+
     if n_splits_cv < 2:
         logger.warning(
             f"Min samples per class ({min_samples_class}) is less than 2. "
-            "GridSearchCV might be unstable or fail. Attempting direct fit."
+            "RandomizedSearchCV might be unstable or fail. "
+            "Attempting direct fit."
         )
         try:
             pipeline.fit(X_hp_train, y_hp_train)
@@ -375,37 +373,43 @@ def _train_svm_model_with_gridsearch(
             roc_auc_score,
             multi_class='ovr',
             average='macro',
-            needs_threshold=True
+            response_method="predict_proba"
         )
     }
-    gs = GridSearchCV(
+    rands = RandomizedSearchCV(
         estimator=pipeline,
-        param_grid=param_grid,
+        param_distributions=param_dist,
+        n_iter=20,
         scoring=scoring,
         refit='roc_auc_ovr',
         cv=stratified_kfold,
         return_train_score=True,
         n_jobs=-1,
+        error_score='raise' if __debug__ else 0.0,
+        random_state=42
     )
     try:
-        logger.info(f"Starting GridSearchCV with cv={n_splits_cv}...")
-        gs.fit(X_hp_train, y_hp_train)
-        best_estimator = gs.best_estimator_
-        cv_results_data = gs.cv_results_
-        logger.info(f"Best SVM Params from GridSearchCV: {gs.best_params_}")
-        logger.info(f"Best F1 Macro (CV): {gs.best_score_:.4f}")
-    except Exception as e:
-        logger.error(f"Error in GridSearchCV for SVM: {e}", exc_info=True)
+        logger.info(f"Starting RandomizedSearchCV with cv={n_splits_cv}...")
+        rands.fit(X_hp_train, y_hp_train)
+        best_estimator = rands.best_estimator_
+        cv_results_data = rands.cv_results_
         logger.info(
-            "Attempting to fit pipeline directly after GridSearchCV failure."
+            f"Best SVM Params from RandomizedSearchCV: {rands.best_params_}"
+        )
+        logger.info(f"Best ROC AUC (CV): {rands.best_score_:.4f}")
+    except Exception as e:
+        logger.error(f"Error in RandomizedSearchCV for SVM: {e}",
+                     exc_info=True)
+        logger.info(
+            "Attempting to fit pipeline directly after "
+            "RandomizedSearchCV failure."
         )
         try:
-            # fit the passed pipeline
             pipeline.fit(X_hp_train, y_hp_train)
             best_estimator = pipeline
         except Exception as e_fit:
             logger.error(
-                "Error fitting SVM pipeline directly after GS "
+                "Error fitting SVM pipeline directly after RandomizedSearchCV "
                 + f"failure: {e_fit}", exc_info=True
             )
 
@@ -491,9 +495,10 @@ def _evaluate_model(
                     if y_proba.shape[1] == len(unique_y_set_labels):
                         roc_auc_calc_labels = unique_y_set_labels
 
+                present_labels = np.unique(y_set)
                 roc_auc_val = roc_auc_score(
                     y_set, y_proba, multi_class="ovr", average="macro",
-                    labels=roc_auc_calc_labels
+                    labels=present_labels
                 )
                 roc_plot_path = (
                     results_dir /
@@ -714,7 +719,7 @@ def plot_learning_curve(
                 roc_auc_score,
                 multi_class="ovr",
                 average="macro",
-                needs_threshold=True
+                response_method="predict_proba"
             ),
             error_score=np.nan
         )
@@ -735,7 +740,7 @@ def plot_learning_curve(
 
         ax.set_title(title)
         ax.set_xlabel("Training examples")
-        ax.set_ylabel("Score (Accuracy)")
+        ax.set_ylabel("Score (ROC AUC OVR Macro)")
         ax.legend(loc="best")
         ax.grid(True)
         plt.tight_layout()
@@ -751,149 +756,62 @@ def plot_learning_curve(
 
 def plot_grid_search_results(
     cv_results: Dict[str, Any],
-    param_C: str,
-    param_gamma: str,
     title: str,
     save_path: pathlib.Path,
 ) -> None:
-    """Plots GridSearchCV results as a heatmap if two params.
+    """Plots key results from a RandomizedSearchCV run.
 
-    Defaults to line plot if not.
-    :param cv_results: dictionary containing the results.
-    :param param_C: the C parameter in the grid search.
-    :param param_gamma: the gamma parameter in the grid search.
+    Creates scatter plots of performance vs. key hyperparameters.
+    :param cv_results: dictionary containing the results from
+                       RandomizedSearchCV.
     :param title: title of the plot.
     :param save_path: path to save the plot.
     """
     try:
-        scores = cv_results["mean_test_score"]
+        # extract results
+        params = cv_results['params']
+        mean_scores = cv_results['mean_test_roc_auc_ovr']
 
-        # ensure params exist in cv_results
-        param_C_key = f"param_{param_C}"
-        param_gamma_key = f"param_{param_gamma}"
+        tuned_params = list(params[0].keys())
 
-        if param_C_key not in cv_results or param_gamma_key not in cv_results:
-            logger.warning(
-                f"One or both params ({param_C_key}, {param_gamma_key}) "
-                "not in cv_results. Skipping GS plot."
-            )
-            # plot for single params if available
-            if param_C_key in cv_results and \
-                    len(np.unique(cv_results[param_C_key].compressed())) > 1:
-                c_values = cv_results[param_C_key].compressed()
-                unique_Cs = sorted(np.unique(c_values.astype(float)))
-                fig, ax = plt.subplots(figsize=(10, 6))
-                ax.plot(unique_Cs, scores[:len(unique_Cs)], 'o-')
-                ax.set_xlabel(param_C.split('__')[-1])
-                ax.set_ylabel("Mean F1 Macro (Validation)")
-                ax.set_title(title)
-                ax.set_xscale('log')
-                plt.tight_layout()
-                fig.savefig(save_path)
-                plt.close(fig)
-                logger.info(
-                    "GridSearchCV results plot (1D for C) saved "
-                    f"to: {save_path}"
-                )
-                return
-            elif (
-                param_gamma_key in cv_results and 
-                len(np.unique(cv_results[param_gamma_key].compressed())) > 1
-            ):
-                gamma_values = cv_results[param_gamma_key].compressed()
-                unique_gammas = sorted(np.unique(gamma_values.astype(str)))
-                fig, ax = plt.subplots(figsize=(10, 6))
-                ax.plot(unique_gammas, scores[:len(unique_gammas)], 'o-')
-                ax.set_xlabel(param_gamma.split('__')[-1])
-                ax.set_ylabel("Mean F1 Macro (Validation)")
-                ax.set_title(title)
-                plt.tight_layout()
-                fig.savefig(save_path)
-                plt.close(fig)
-                logger.info(
-                    "GridSearchCV results plot (1D for gamma) saved "
-                    f"to: {save_path}"
-                )
-                return
+        fig, axes = plt.subplots(
+            1, len(tuned_params), figsize=(5 * len(tuned_params), 5)
+        )
+        if len(tuned_params) == 1:
+            axes = [axes]
+
+        fig.suptitle(title, fontsize=16)
+
+        for i, param_name in enumerate(tuned_params):
+            param_values = [p[param_name] for p in params]
+            ax = axes[i]
+
+            if any(isinstance(p, str) or p is None for p in param_values):
+                # Use string categories for the axis
+                cats = sorted(list(set(map(str, param_values))))
+                cat_map = {cat: j for j, cat in enumerate(cats)}
+                numeric_vals = [cat_map[str(p)] for p in param_values]
+                ax.scatter(numeric_vals, mean_scores)
+                ax.set_xticks(list(cat_map.values()))
+                ax.set_xticklabels(list(cat_map.keys()), rotation=45,
+                                   ha='right')
             else:
-                logger.warning(
-                    "Not enough varying parameters to plot GridSearchCV"
-                    " results meaningfully."
-                )
-                return
+                ax.scatter(param_values, mean_scores)
 
-        c_values = cv_results[param_C_key]
-        gamma_values = cv_results[param_gamma_key]
+            ax.set_xlabel(param_name)
+            ax.set_ylabel("Mean Test ROC AUC")
+            ax.grid(True)
+            if param_name == 'svm__estimator__C':
+                ax.set_xscale('log')
 
-        if isinstance(c_values, np.ma.MaskedArray):
-            c_values = c_values.compressed()
-        if isinstance(gamma_values, np.ma.MaskedArray):
-            gamma_values = gamma_values.compressed()
-
-        unique_Cs = sorted(np.unique(c_values.astype(float)))
-        unique_gammas_str = sorted(np.unique(gamma_values.astype(str)))
-
-        if len(unique_Cs) > 1 and len(unique_gammas_str) > 1:
-            try:
-                scores_reshaped = scores.reshape(
-                    len(unique_Cs), len(unique_gammas_str)
-                )
-            except ValueError:
-                logger.error(
-                    f"Could not reshape scores for GS plot. Check cv_results "
-                    f"structure. Number of C values: {len(unique_Cs)}, "
-                    f"Gamma values: {len(unique_gammas_str)}, "
-                    f"Scores length: {len(scores)}"
-                )
-                return
-
-            fig, ax = plt.subplots(figsize=(10, 8))
-            im = ax.imshow(
-                scores_reshaped, interpolation="nearest",
-                cmap=plt.cm.viridis, aspect='auto'
-            )
-            ax.figure.colorbar(im, ax=ax, label="Mean F1 Macro (Validation)")
-            ax.set_xlabel(param_gamma.split('__')[-1])
-            ax.set_ylabel(param_C.split('__')[-1])
-            ax.set_xticks(
-                np.arange(len(unique_gammas_str)), labels=unique_gammas_str,
-                rotation=45, ha="right"
-            )
-            ax.set_yticks(
-                np.arange(len(unique_Cs)),
-                labels=[f"{c:.4f}" for c in unique_Cs]
-            )
-            ax.set_title(f"{title}")
-
-            for i in range(len(unique_Cs)):
-                for j in range(len(unique_gammas_str)):
-                    if scores_reshaped[i, j] < (scores_reshaped.max() * 0.6):
-                        text_color = "w" 
-                    else:
-                        text_color = "black"
-                    ax.text(
-                        j, i, f"{scores_reshaped[i, j]:.3f}", ha="center",
-                        va="center", color=text_color
-                    )
-        elif len(unique_Cs) > 1:
-            pass
-        elif len(unique_gammas_str) > 1:
-            pass
-        else:
-            logger.warning(
-                "Not enough varying parameters for a 2D heatmap in "
-                "GridSearchCV results."
-            )
-            return
-
-        plt.tight_layout()
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         fig.savefig(save_path)
         plt.close(fig)
-        logger.info(f"GridSearchCV results plot saved to: {save_path}")
+        logger.info(f"RandomizedSearchCV results plot saved to: {save_path}")
 
     except Exception as e:
         logger.error(
-            f"Error plotting GridSearchCV results for {title}: {e}",
+            f"Error plotting RandomizedSearchCV results for {title}: {e}",
             exc_info=True
         )
 
@@ -906,38 +824,80 @@ def plot_roc_curves(
     save_path: pathlib.Path
 ) -> None:
     """One-Vs-Rest ROC curves and macro-avg."""
-    ovr = OneVsRestClassifier(estimator)
-    y_score = ovr.fit(X, y).predict_proba(X)
+    try:
+        y_score = estimator.predict_proba(X)
+        estimator_classes = estimator.classes_
 
-    # compute per-class ROC
-    fpr, tpr, roc_auc = {}, {}, {}
-    for i, lab in enumerate(labels):
-        fpr[i], tpr[i], _ = roc_curve((y == lab).astype(int), y_score[:, i])
-        roc_auc[i] = auc(fpr[i], tpr[i])
+        class_to_idx = {cls: i for i, cls in enumerate(estimator_classes)}
 
-    # macro-average
-    all_fpr = np.unique(np.concatenate([fpr[i] for i in labels]))
-    mean_tpr = np.zeros_like(all_fpr)
-    for i in labels:
-        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
-    mean_tpr /= len(labels)
-    fpr["macro"], tpr["macro"] = all_fpr, mean_tpr
-    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+        fpr, tpr, roc_auc = {}, {}, {}
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    for i, lab in enumerate(labels):
-        ax.plot(fpr[i], tpr[i], lw=1,
-                label=f"Class {lab} (AUC = {roc_auc[i]:.2f})")
-    ax.plot(fpr["macro"], tpr["macro"], 'k--',
-            label=f"Macro-AUC = {roc_auc['macro']:.2f}", lw=2)
+        all_labels = np.unique(y)
 
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curves")
-    ax.legend(loc="lower right")
-    plt.tight_layout()
-    fig.savefig(save_path)
-    plt.close(fig)
+        for lab in sorted(list(np.unique(np.concatenate(
+                (all_labels, estimator_classes))))):
+            if lab in class_to_idx:
+                idx = class_to_idx[lab]
+                fpr[lab], tpr[lab], _ = roc_curve(
+                    (y == lab).astype(int), y_score[:, idx]
+                )
+                roc_auc[lab] = auc(fpr[lab], tpr[lab])
+            else:
+                fpr[lab], tpr[lab], roc_auc[lab] = (
+                    np.array([0]), np.array([0]), 0.0
+                )
+
+        # macro-average
+        all_fpr = np.unique(np.concatenate([fpr[i] for i in labels]))
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in labels:
+            mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+        mean_tpr /= len(labels)
+        fpr["macro"], tpr["macro"] = all_fpr, mean_tpr
+        roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        for i, lab in enumerate(labels):
+            ax.plot(fpr[i], tpr[i], lw=1,
+                    label=f"Class {lab} (AUC = {roc_auc[i]:.2f})")
+        ax.plot(fpr["macro"], tpr["macro"], 'k--',
+                label=f"Macro-AUC = {roc_auc['macro']:.2f}", lw=2)
+
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title("ROC Curves")
+        ax.legend(loc="lower right")
+        plt.tight_layout()
+        fig.savefig(save_path)
+        plt.close(fig)
+    except Exception as e:
+        logger.error(f"Failed to plot ROC curves: {e}", exc_info=True)
+
+
+def plot_search_history(cv_results, save_path):
+    """Plots the training and validation scores over search iterations."""
+    try:
+        plt.figure(figsize=(10, 6))
+
+        results = cv_results
+        train_scores = results['mean_train_score']
+        val_scores = results['mean_test_score']
+        iterations = range(1, len(train_scores) + 1)
+
+        plt.plot(iterations, train_scores, 'o-', color="r", label="Training score")
+        plt.plot(iterations, val_scores, 'o-', color="g", label="Cross-validation score")
+
+        plt.title("Training and Validation Score Across Search Iterations")
+        plt.xlabel("Iteration")
+        plt.ylabel("Score (ROC AUC OVR Macro)")
+        plt.legend(loc="best")
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(save_path)
+        plt.close()
+        logger.info(f"Search history plot saved to: {save_path}")
+    except Exception as e:
+        logger.error(f"Could not plot search history: {e}")
 
 
 def _convert_to_json_serializable(item: Any) -> Any:
@@ -1041,8 +1001,8 @@ def main_svm() -> None:
                     if X_val is not None and y_val is not None and \
                             X_val.size > 0 and y_val.size > 0:
                         logger.info(
-                            "Combining X_train and X_val for GridSearchCV"
-                            " hyperparameter tuning."
+                            "Combining X_train and X_val for "
+                            " RandomizedSearchCV hyperparameter tuning."
                         )
                         X_hp_train_svm = np.vstack((X_train, X_val))
                         y_hp_train_svm = np.concatenate((y_train, y_val))
@@ -1060,14 +1020,17 @@ def main_svm() -> None:
                         X_hp_train_svm, y_hp_train_svm = shuffle(
                             X_hp_train_svm, y_hp_train_svm, random_state=42
                         )
-                        svm_param_grid = {
-                            "svm__estimator__C": [0.1, 1, 10, 50, 100],
-                            "svm__estimator__gamma": [1e-5, 1e-4, 1e-3, 1e-2, 0.1,
-                                                      "scale", "auto"],
+                        svm_param_dist = {
+                            "svm__estimator__C": uniform(0.1, 50),
+                            "svm__estimator__gamma": [1e-5, 1e-4, 1e-3, 1e-2,
+                                                      0.1, "scale", "auto"],
+                            "feature_selection__k": randint(
+                                10, X_hp_train_svm.shape[1] + 1),
+                            "pca__n_components": [0.9, 0.95, 0.99, None]
                         }
                         best_svm_estimator, cv_results = (
-                            _train_svm_model_with_gridsearch(
-                                svm_pipeline, svm_param_grid,
+                            _train_svm_with_randomizedsearch(
+                                svm_pipeline, svm_param_dist,
                                 X_hp_train_svm, y_hp_train_svm
                             )
                         )
@@ -1077,11 +1040,14 @@ def main_svm() -> None:
                         )
                         if cv_results:
                             plot_grid_search_results(
-                                cv_results, param_C="svm__estimator__C",
-                                param_gamma="svm__estimator__gamma",
-                                title=f"GridSearchCV Results - {fusion_config_key}",
+                                cv_results,
+                                title=f"RandomizedSearchCV Results - {fusion_config_key}",
                                 save_path=gs_plot_save_path
                             )
+                            search_history = (
+                                RESULTS_DIR / f"history_{fusion_config_key}.png"
+                            )
+                            plot_search_history(cv_results, search_history)
 
                         if best_svm_estimator:
                             # evaluate on Training set
@@ -1153,7 +1119,37 @@ def main_svm() -> None:
                                     exc_info=True
                                 )
 
-                            final_model_for_lc = best_svm_estimator
+                            # create a clone of the estimator for plots
+                            logger.info(
+                                "Preparing a plot-safe estimator for "
+                                "the learning curve."
+                            )
+                            plot_safe_estimator = clone(best_svm_estimator)
+
+                            pipeline_steps = getattr(
+                                plot_safe_estimator, 'steps', []
+                            )
+                            is_smote_in_pipeline = any(
+                                name == 'smote' for name, _ in pipeline_steps
+                            )
+
+                            if is_smote_in_pipeline:
+                                try:
+                                    # set a safe k_neighbors value
+                                    plot_safe_estimator.set_params(
+                                        smote__k_neighbors=1
+                                    )
+                                    logger.info(
+                                        "Set smote__k_neighbors=1 in "
+                                        "plot-safe estimator."
+                                    )
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Could not modify k_neighbors"
+                                        f" for plotting: {e}"
+                                    )
+
+                            final_model_for_lc = plot_safe_estimator
                             lc_save_path = (
                                 RESULTS_DIR / f"lc_{fusion_config_key}.png"
                             )
