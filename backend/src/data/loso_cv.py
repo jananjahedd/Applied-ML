@@ -24,7 +24,7 @@ from src.features.feature_engineering import FeatureEngineering
 from src.utils.logger import get_logger
 
 from src.utils.paths import (get_processed_data_dir,
-                             get_repo_root, get_splits_data)
+                                     get_repo_root, get_splits_data)
 
 
 PROJECT_ROOT = pathlib.Path(get_repo_root())

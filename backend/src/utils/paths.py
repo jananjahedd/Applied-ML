@@ -1,34 +1,39 @@
-"""Module for retrieving all the important paths."""
+"""Module for retrieving all the important paths.
+
+This module is context-aware and will define the correct root path
+whether it is running inside a Docker container or a local machine.
+"""
 import os
 
 
-# get the directory of the current file
-UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
-# get the root directory of the repository
-ROOT = os.path.abspath(os.path.join(UTILS_DIR, '..', '..'))
-# define the rest of the paths relative to the root
-SRC_DIR = os.path.join(ROOT, 'src')
-DATA_DIR = os.path.join(ROOT, 'data')
+if os.path.isdir('/app'):
+    # in docker
+    APP_ROOT = '/app'
+else:
+    # running locally
+    THIS_FILE = os.path.dirname(os.path.abspath(__file__))
+    APP_ROOT = os.path.abspath(os.path.join(THIS_FILE, '..', '..', '..'))
+
+# definition of all paths for the app
+BACKEND_DIR = os.path.join(APP_ROOT, 'backend')
+SRC_DIR = os.path.join(BACKEND_DIR, 'src')
+DATA_DIR = os.path.join(APP_ROOT, 'data')
 PROCESSED_DATA_DIR = os.path.join(DATA_DIR, 'processed_data')
 SPLITS_DATA_DIR = os.path.join(DATA_DIR, "data_splits")
-NOTEBOOKS_DIR = os.path.join(ROOT, 'notebooks')
 MODELS_DIR = os.path.join(SRC_DIR, "models")
-UTILS_DIR = os.path.join(SRC_DIR, "utils")
-SRC_DATA_DIR = os.path.join(SRC_DIR, "data")
 FEATURES_DIR = os.path.join(SRC_DIR, "features")
-LOGS_DIR = os.path.join(ROOT, "logs")
-RESULTS_DIR = os.path.join(ROOT, "results")
-
-
-for _dir in [SRC_DIR, DATA_DIR, PROCESSED_DATA_DIR, SPLITS_DATA_DIR,
-             NOTEBOOKS_DIR, MODELS_DIR, UTILS_DIR, SRC_DATA_DIR,
-             FEATURES_DIR, LOGS_DIR, RESULTS_DIR]:
-    os.makedirs(_dir, exist_ok=True)
+LOGS_DIR = os.path.join(BACKEND_DIR, "logs")
+RESULTS_DIR = os.path.join(APP_ROOT, "results")
 
 
 def get_repo_root() -> str:
     """Get the absolute path to the root repository."""
-    return ROOT
+    return APP_ROOT
+
+
+def get_backend_root() -> str:
+    """Get the absolute path to the backend directory."""
+    return BACKEND_DIR
 
 
 def get_src_dir() -> str:

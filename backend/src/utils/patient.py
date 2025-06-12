@@ -4,7 +4,7 @@ from enum import Enum
 from os.path import basename, isfile
 from typing import Any, Dict
 
-import mne
+import mne  # type: ignore
 
 from src.utils.logger import get_logger
 from src.utils.recording import Recording

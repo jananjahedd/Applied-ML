@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:80"
+    volumes:
+      # for linking the local ./data to /app/data
+      - ./data:/app/data
+      - ./example-data:/app/example-data
+      # link the local results to the app
+      - ./results:/app/results
+  
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    environment:
+      - FASTAPI_BASE_URL=http://backend

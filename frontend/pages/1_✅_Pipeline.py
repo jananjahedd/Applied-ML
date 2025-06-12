@@ -3,8 +3,9 @@
 import streamlit as st
 import requests
 import pandas as pd
+import os
 
-FASTAPI_BASE_URL = "http://127.0.0.1:8000"
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://127.0.0.1:8000")
 
 PREDICT_ENDPOINT = f"{FASTAPI_BASE_URL}/pipeline/predict-edf"
 PERFORMANCE_ENDPOINT = f"{FASTAPI_BASE_URL}/pipeline/all-performance"

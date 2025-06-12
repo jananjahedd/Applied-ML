@@ -1,8 +1,9 @@
 """ Streamlit page for managing EDF files from a FastAPI backend."""
 import streamlit as st
 import requests
+import os
 
-FASTAPI_BASE_URL = "http://127.0.0.1:8000"
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://127.0.0.1:8000")
 
 st.set_page_config(
     page_title="EDF File Selector 📂",

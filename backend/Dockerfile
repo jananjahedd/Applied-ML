@@ -1,7 +1,9 @@
+# /backend/ Dockerfile
+# builder stage
 FROM python:3.9-slim-bullseye AS builder
 
 # set the working directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -13,9 +15,12 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-RUN pip install --upgrade pip setuptools wheel && \
+RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+COPY . .
+
+# production stage
 FROM python:3.9-slim-bullseye
 
 WORKDIR /app
@@ -23,15 +28,15 @@ WORKDIR /app
 RUN addgroup --system appgroup && adduser --system --no-create-home --ingroup appgroup appuser
 
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app /app
 
-COPY . .
+RUN mkdir -p /app/data /app/results /app/logs
 
 RUN chown -R appuser:appgroup /app
 
 USER appuser
 
 ENV PATH="/opt/venv/bin:$PATH"
-
 ENV MPLCONFIGDIR=/app/.cache
 
 EXPOSE 80

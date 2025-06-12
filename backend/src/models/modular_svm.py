@@ -34,12 +34,10 @@ from sklearn.pipeline import Pipeline as SklearnPipeline  # type: ignore
 from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.svm import SVC  # type: ignore
 from sklearn.utils import shuffle  # type: ignore
-
-from src.utils.paths import (get_splits_data,
+from src.utils.paths import (get_splits_data, get_results_dir,
                              get_repo_root)
 from src.utils.logger import get_logger
 from sklearn.calibration import CalibratedClassifierCV  # type: ignore
-from sklearn.multiclass import OneVsRestClassifier  # type: ignore
 from sklearn.metrics import roc_curve, auc  # type: ignore
 from sklearn.feature_selection import SelectKBest, f_classif  # type: ignore
 from sklearn.base import clone  # type: ignore
@@ -65,8 +63,7 @@ logger = get_logger("svm")
 
 PROJECT_ROOT = pathlib.Path(get_repo_root())
 SPLITS_DIR = pathlib.Path(get_splits_data())
-RESULTS_DIR = PROJECT_ROOT / "results5"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+RESULTS_DIR = pathlib.Path(get_results_dir())
 
 # Define configurations to run SVM on
 CONFIGS_TO_RUN = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
