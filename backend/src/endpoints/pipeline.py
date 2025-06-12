@@ -2,6 +2,7 @@
 import os
 import tempfile
 import re
+import json
 from typing import Dict, List, Optional, Any, Tuple
 import joblib
 import numpy as np
@@ -41,7 +42,7 @@ router = APIRouter(prefix="/pipeline", tags=["ML Pipeline"])
 
 MODELS_DIR = "results"
 AVAILABLE_CONFIGS = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
-DEFAULT_CONFIG = "eeg_emg_eog"
+DEFAULT_CONFIG = "eeg_emg"
 
 
 def preprocess_edf_for_api(
@@ -236,7 +237,7 @@ def extract_features_for_config(
 
 
 def load_model(config: str) -> SklearnPipeline:
-    model_path = os.path.join(MODELS_DIR, f"svm_model_{config}.joblib")
+    model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -338,200 +339,144 @@ def evaluate_model_on_data(model, X_test, y_test, config: str,
     }
 
 
+def _parse_rf_classification_report(
+        report_str: str) -> Tuple[Dict[str, Any], int]:
+    """Helper to parse a string classification report.
+
+    :param report_str: the classification report.
+    :return: tuple containing the a dictionary of
+             metrics per class and the total support.
+    """
+    lines = report_str.strip().split('\n')
+    per_class_metrics = {}
+    total_support = 0
+
+    for line in lines:
+        parts = line.split()
+        if len(parts) > 2 and parts[0].isdigit():
+            class_id = int(parts[0])
+            class_name = f"Class {class_id}"
+
+            if len(parts) >= 5:
+                precision = float(parts[1])
+                recall = float(parts[2])
+                f1_score = float(parts[3])
+                support = int(parts[4])
+
+                per_class_metrics[class_name] = {
+                    "precision": precision,
+                    "recall": recall,
+                    "f1_score": f1_score,
+                    "support": support
+                }
+        elif "accuracy" in line and len(parts) >= 2 and parts[-1].isdigit():
+            total_support = int(parts[-1])
+
+    if total_support == 0:
+        total_support = sum(m["support"] for m in per_class_metrics.values())
+
+    return per_class_metrics, total_support
+
+
 def load_pretrained_metrics(config: str) -> Dict[str, Any]:
     """
-    Load metrics from SVM training log files instead of .npz files.
-    Parses the log to extract training, validation, and test metrics.
+    Load metrics for the Random Forest model from the specified JSON file,
+    including both training and test set metrics.
     """
-    # change if needed
-    possible_log_dirs = [
-        "logs",
-        "../logs",
-        "../../logs",
-        "/scratch/s5130727/Applied-ML/logs",
-        "/Users/jananjahed/Desktop/ML_applied/Applied-ML/logs"
-    ]
+    metrics_path = os.path.join(MODELS_DIR, f"metrics_{config}.json")
 
-    log_file_path = None
-
-    for log_dir in possible_log_dirs:
-        if os.path.exists(log_dir):
-            try:
-                log_files = [f for f in os.listdir(log_dir) if f.startswith("svm_train_") and f.endswith(".err")]
-                if log_files:
-                    log_files.sort(reverse=True)
-                    log_file_path = os.path.join(log_dir, log_files[0])
-                    break
-            except Exception as e:
-                logger.warning(f"Could not access log directory {log_dir}: {e}")
-                continue
-
-    if not log_file_path or not os.path.exists(log_file_path):
-        logger.warning(f"No SVM training log file found for config '{config}'")
-        return {
-            "training_metrics": None,
-            "validation_metrics": None,
-            "test_metrics": None
-        }
+    if not os.path.exists(metrics_path):
+        logger.warning(
+            f"Metrics file not found for config '{config}' at {metrics_path}"
+        )
+        return {"training_metrics": None, "validation_metrics": None,
+                "test_metrics": None}
 
     try:
-        with open(log_file_path, 'r') as f:
-            log_content = f.read()
+        with open(metrics_path, 'r') as f:
+            metrics_data = json.load(f)
+        logger.info(f"Successfully loaded metrics from {metrics_path}")
 
-        logger.info(f"Found and reading log file: {log_file_path}")
-        metrics = parse_metrics_from_log(log_content, config)
-        return metrics
+        def process_metric_block(metric_key: str, report_key: str,
+                                 data_source: str) -> Optional[Dict[str, Any]]:
+            if metric_key not in metrics_data:
+                return None
 
-    except Exception as e:
-        logger.error(f"Error reading log file {log_file_path}: {e}")
-        return {
-            "training_metrics": None,
-            "validation_metrics": None,
-            "test_metrics": None
+            metrics_raw = metrics_data[metric_key]
+            report_str = metrics_data.get(report_key, "")
+            per_class_metrics, dataset_size = _parse_rf_classification_report(
+                report_str
+            )
+
+            (macro_precision, macro_recall, weighted_precision,
+             weighted_recall, weighted_f1) = 0, 0, 0, 0, 0
+            if per_class_metrics and dataset_size > 0:
+                precisions = [
+                    m["precision"] for m in per_class_metrics.values()
+                ]
+                recalls = [m["recall"] for m in per_class_metrics.values()]
+                macro_precision = (
+                    sum(precisions) / len(precisions) if precisions else 0
+                )
+                macro_recall = sum(recalls) / len(recalls) if recalls else 0
+                for metrics in per_class_metrics.values():
+                    weighted_precision += (
+                        metrics["precision"] * metrics["support"]
+                    )
+                    weighted_recall += metrics["recall"] * metrics["support"]
+                    weighted_f1 += metrics["f1_score"] * metrics["support"]
+                weighted_precision /= dataset_size
+                weighted_recall /= dataset_size
+                weighted_f1 /= dataset_size
+
+            return {
+                "dataset_size": dataset_size,
+                "overall_metrics": {
+                    "accuracy": metrics_raw.get("accuracy"),
+                    "macro_precision": macro_precision,
+                    "macro_recall": macro_recall,
+                    "macro_f1_score": metrics_raw.get("macro_f1"),
+                    "weighted_precision": weighted_precision,
+                    "weighted_recall": weighted_recall,
+                    "weighted_f1_score": weighted_f1,
+                    "roc_auc_macro": metrics_raw.get("macro_roc_auc_ovr"),
+                },
+                "per_class_metrics": per_class_metrics,
+                "confusion_matrix": None,
+                "class_distribution": {name: metrics["support"] for name, metrics in per_class_metrics.items()},
+                "data_source": data_source
+            }
+
+        training_metrics = process_metric_block(
+            "training_set_metrics",
+            "training_set_classification_report",
+            "Parsed from JSON - Training set"
+        )
+        test_metrics = process_metric_block(
+            "test_set_metrics",
+            "test_set_classification_report",
+            "Parsed from JSON - Test set"
+        )
+
+        validation_metrics = {
+             "dataset_size": None,
+             "overall_metrics": {"macro_f1_score": metrics_data.get("best_cv_macro_f1")},
+             "details": {"best_hyperparameters": metrics_data.get("best_hyperparameters")},
+             "data_source": "From Cross-Validation (best_cv_macro_f1)"
         }
 
-
-def parse_metrics_from_log(log_content: str, config: str) -> Dict[str, Any]:
-    """
-    Parse metrics from the SVM training log content for a specific configuration.
-    """
-    config_sections = log_content.split("--- Processing Fusion Configuration")
-
-    target_section = None
-    for section in config_sections:
-        if f": {config} ---" in section:
-            target_section = section
-            break
-
-    if not target_section:
-        logger.warning(f"Configuration '{config}' not found in log")
         return {
-            "training_metrics": None,
-            "validation_metrics": None,
-            "test_metrics": None
-        }
-
-    training_metrics = extract_dataset_metrics(target_section, "Training", config)
-    validation_metrics = extract_dataset_metrics(target_section, "Validation", config)
-    test_metrics = extract_dataset_metrics(target_section, "Test", config)
-
-    return {
-        "training_metrics": training_metrics,
-        "validation_metrics": validation_metrics,
-        "test_metrics": test_metrics
-    }
-
-
-def extract_dataset_metrics(section: str, dataset_type: str, config: str) -> Optional[Dict[str, Any]]:
-    """
-    Extract metrics for a specific dataset type (Training/Validation/Test) from log section.
-    """
-    try:
-        # Find the performance section for this dataset type
-        pattern = rf"--- Evaluating on {dataset_type} set for config '{config}' ---.*?(?=--- Evaluating on|--- Processing|$)"
-        match = re.search(pattern, section, re.DOTALL)
-
-        if not match:
-            return None
-
-        dataset_section = match.group(0)
-
-        accuracy_match = re.search(r"Accuracy: ([\d.]+)", dataset_section)
-        f1_match = re.search(r"Macro F1: ([\d.]+)", dataset_section)
-        roc_auc_match = re.search(r"ROC AUC \(OVR Macro\): ([\d.]+|N/A)", dataset_section)
-
-        if not (accuracy_match and f1_match):
-            return None
-
-        accuracy = float(accuracy_match.group(1))
-        macro_f1 = float(f1_match.group(1))
-        roc_auc = None if not roc_auc_match or roc_auc_match.group(1) == "N/A" else float(roc_auc_match.group(1))
-
-        report_pattern = r"precision\s+recall\s+f1-score\s+support(.*?)accuracy"
-        report_match = re.search(report_pattern, dataset_section, re.DOTALL)
-
-        per_class_metrics = {}
-        dataset_size = 0
-
-        if report_match:
-            report_lines = report_match.group(1).strip().split('\n')
-
-            for line in report_lines:
-                line = line.strip()
-                if line.startswith('Class'):
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        class_name = parts[0] + " " + parts[1]  # "Class 0", "Class 1", etc.
-                        precision = float(parts[2])
-                        recall = float(parts[3])
-                        f1_score = float(parts[4])
-                        support = int(parts[5])
-
-                        per_class_metrics[class_name] = {
-                            "precision": precision,
-                            "recall": recall,
-                            "f1_score": f1_score,
-                            "support": support
-                        }
-                        dataset_size += support
-
-        cm_pattern = r"Confusion Matrix \(" + dataset_type + rf" - Config: {config}\):\s*(\[.*?\])"
-        cm_match = re.search(cm_pattern, dataset_section, re.DOTALL)
-
-        confusion_matrix = None
-        if cm_match:
-            try:
-                cm_text = cm_match.group(1)
-                cm_lines = []
-                for line in cm_text.split('\n'):
-                    line = line.strip()
-                    if line.startswith('[') and line.endswith(']'):
-                        numbers = re.findall(r'\d+', line)
-                        if numbers:
-                            cm_lines.append([int(n) for n in numbers])
-
-                if cm_lines:
-                    confusion_matrix = {
-                        "matrix": cm_lines,
-                        "labels": list(per_class_metrics.keys())
-                    }
-            except Exception as e:
-                logger.warning(f"Could not parse confusion matrix: {e}")
-
-        if per_class_metrics:
-            precisions = [m["precision"] for m in per_class_metrics.values()]
-            recalls = [m["recall"] for m in per_class_metrics.values()]
-            f1_scores = [m["f1_score"] for m in per_class_metrics.values()]
-            supports = [m["support"] for m in per_class_metrics.values()]
-
-            total_support = sum(supports)
-            weighted_precision = sum(p * s for p, s in zip(precisions, supports)) / total_support if total_support > 0 else 0
-            weighted_recall = sum(r * s for r, s in zip(recalls, supports)) / total_support if total_support > 0 else 0
-            weighted_f1 = sum(f * s for f, s in zip(f1_scores, supports)) / total_support if total_support > 0 else 0
-        else:
-            weighted_precision = weighted_recall = weighted_f1 = 0
-
-        return {
-            "dataset_size": dataset_size,
-            "overall_metrics": {
-                "accuracy": accuracy,
-                "macro_precision": sum(precisions) / len(precisions) if precisions else 0,
-                "macro_recall": sum(recalls) / len(recalls) if recalls else 0,
-                "macro_f1_score": macro_f1,
-                "weighted_precision": weighted_precision,
-                "weighted_recall": weighted_recall,
-                "weighted_f1_score": weighted_f1,
-                "roc_auc_macro": roc_auc
-            },
-            "per_class_metrics": per_class_metrics,
-            "confusion_matrix": confusion_matrix,
-            "class_distribution": {name: metrics["support"] for name, metrics in per_class_metrics.items()},
-            "data_source": f"Parsed from SVM training log - {dataset_type} set"
+            "training_metrics": training_metrics,
+            "validation_metrics": validation_metrics,
+            "test_metrics": test_metrics
         }
 
     except Exception as e:
-        logger.error(f"Error extracting {dataset_type} metrics for {config}: {e}")
-        return None
+        logger.error(
+            f"Error reading or parsing metrics file {metrics_path}: {e}"
+        )
+        return {"training_metrics": None, "validation_metrics": None,
+                "test_metrics": None}
 
 
 @router.post("/predict-edf", response_model=PredictEDFResponse)
@@ -548,27 +493,27 @@ async def predict_edf_file(
     Complete Automated Sleep Stage Prediction Pipeline.
     This endpoint can be triggered by a direct file upload or internally with a server file path.
     Model Performance (Validation Set):
-#     - Accuracy: ~60% vs 20% random guessing (5-class problem)
-#     - Tested on 10 subjects
-#     - Significantly outperforms random classification
+     - Accuracy: ~60% vs 20% random guessing (5-class problem)
+     - Tested on 10 subjects
+     - Significantly outperforms random classification
 
-#     Just upload or select your EDF file and get sleep stage predictions!
+    Just upload or select your EDF file and get sleep stage predictions!
 
-#     This endpoint automatically:
-#     1. Uploads and validates your EDF file
-#     2. Preprocesses using proven clinical pipeline
-#     3. Extracts sleep-relevant features from EEG/EOG/EMG
-#     4. Predicts sleep stages using trained SVM models
-#     5. Returns detailed predictions with confidence scores
+    This endpoint automatically:
+     1. Uploads and validates your EDF file
+     2. Preprocesses using proven clinical pipeline
+     3. Extracts sleep-relevant features from EEG/EOG/EMG
+     4. Predicts sleep stages using trained SVM models
+     5. Returns detailed predictions with confidence scores
 
-#     Input: EDF file (+ optional hypnogram)
-#     Output: Sleep stage predictions for every 30-second epoch
+    Input: EDF file (+ optional hypnogram)
+    Output: Sleep stage predictions for every 30-second epoch
 
-#     Supported configurations:
-#     - `eeg`: EEG channels only
-#     - `eeg_emg`: EEG + EMG (good for REM detection)
-#     - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
-#     - `eeg_emg_eog`: All channels (most comprehensive, default)
+    Supported configurations:
+     - `eeg`: EEG channels only
+     - `eeg_emg`: EEG + EMG (good for REM detection)
+     - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
+     - `eeg_emg_eog`: All channels (most comprehensive, default)
     """
     edf_path = edf_path_internal
     hypno_path = None
@@ -723,28 +668,23 @@ async def predict_selected_file(
 @router.get("/all-performance/{config}", response_model=Dict[str, Any])
 async def get_all_performance_metrics(config: str, request: Request = None):
     """
-    Get Complete Performance Analysis
+    Get Complete Performance Analysis for the Random Forest model.
 
-    Returns ALL performance metrics for a model configuration:
+    Returns ALL available performance metrics for a model configuration:
     - Training metrics (how well model fit training data)
-    - Validation metrics (hyperparameter tuning performance)
+    - Validation metrics (from cross-validation during training)
     - Test metrics (final unseen data performance)
     - Model comparison and overfitting analysis
-
-    Model Performance Evidence:
-    - Validation Accuracy: ~70% vs 20% random guessing
-    - Test Accuracy: ~60%
     """
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Invalid configuration '{config}'."
-                + f" Available: {AVAILABLE_CONFIGS}"
-            )
+                + f"Available: {AVAILABLE_CONFIGS}")
         )
 
-    model_path = os.path.join(MODELS_DIR, f"svm_model_{config}.joblib")
+    model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
     if not os.path.exists(model_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -755,92 +695,58 @@ async def get_all_performance_metrics(config: str, request: Request = None):
         pretrained_metrics = load_pretrained_metrics(config)
 
         overfitting_analysis = {}
-        if pretrained_metrics["training_metrics"] and \
-                pretrained_metrics["test_metrics"]:
+        train_metrics = pretrained_metrics.get("training_metrics")
+        test_metrics = pretrained_metrics.get("test_metrics")
 
-            train_acc = pretrained_metrics["training_metrics"][
-                "overall_metrics"]["accuracy"]
-            test_acc = pretrained_metrics["test_metrics"]["overall_metrics"][
-                "accuracy"
-            ]
-            train_f1 = pretrained_metrics["training_metrics"][
-                "overall_metrics"]["macro_f1_score"]
-            test_f1 = pretrained_metrics["test_metrics"]["overall_metrics"][
-                "macro_f1_score"
-            ]
+        if train_metrics and test_metrics:
+            train_acc = train_metrics["overall_metrics"].get("accuracy", 0.0)
+            test_acc = test_metrics["overall_metrics"].get("accuracy", 0.0)
+            train_f1 = train_metrics["overall_metrics"].get("macro_f1_score", 0.0)
+            test_f1 = test_metrics["overall_metrics"].get("macro_f1_score", 0.0)
+
+            accuracy_drop = train_acc - test_acc
+            f1_drop = train_f1 - test_f1
 
             overfitting_analysis = {
-                "accuracy_drop": round(train_acc - test_acc, 4),
-                "f1_drop": round(train_f1 - test_f1, 4),
+                "accuracy_dropoff": f"{accuracy_drop:.4f} (Train: {train_acc:.4f}, Test: {test_acc:.4f})",
+                "f1_score_dropoff": f"{f1_drop:.4f} (Train: {train_f1:.4f}, Test: {test_f1:.4f})",
                 "overfitting_severity": (
-                    "Low" if (train_acc - test_acc) < 0.05
-                    else "Moderate" if (train_acc - test_acc) < 0.15
-                    else "High"
+                    "Low" if accuracy_drop < 0.05 else
+                    "Moderate" if accuracy_drop < 0.15 else
+                    "High"
                 ),
                 "generalization_quality": (
-                    "Excellent" if (train_acc - test_acc) < 0.03
-                    else "Good" if (train_acc - test_acc) < 0.08
-                    else "Fair" if (train_acc - test_acc) < 0.15
-                    else "Poor"
+                    "Excellent" if accuracy_drop < 0.03 else
+                    "Good" if accuracy_drop < 0.08 else
+                    "Fair" if accuracy_drop < 0.15 else
+                    "Poor"
                 ),
                 "vs_random_guessing": {
                     "random_accuracy": 0.20,
                     "test_accuracy": test_acc,
-                    "improvement_over_random": round(
-                        (test_acc - 0.20) / 0.20 * 100, 1
-                    ),
-                    "significantly_above_random": test_acc > 0.35
+                    "significantly_above_random": round((test_acc - 0.20) / 0.20 * 100, 1),
                 }
             }
 
         summary = {}
-        if pretrained_metrics["training_metrics"]:
+        if train_metrics:
             summary["training"] = {
-                "accuracy": (
-                    pretrained_metrics["training_metrics"]["overall_metrics"][
-                        "accuracy"
-                    ]
-                ),
-                "f1_score": (
-                    pretrained_metrics["training_metrics"]["overall_metrics"][
-                        "macro_f1_score"
-                    ]
-                ),
-                "dataset_size": (
-                    pretrained_metrics["training_metrics"]["dataset_size"]
-                )
+                "accuracy": train_metrics["overall_metrics"].get("accuracy"),
+                "f1_score": train_metrics["overall_metrics"].get("macro_f1_score"),
+                "dataset_size": train_metrics.get("dataset_size")
             }
 
-        if pretrained_metrics["validation_metrics"]:
+        val_metrics_data = pretrained_metrics.get("validation_metrics")
+        if val_metrics_data:
             summary["validation"] = {
-                "accuracy": (
-                    pretrained_metrics["validation_metrics"][
-                        "overall_metrics"]["accuracy"]
-                ),
-                "f1_score": (
-                    pretrained_metrics["validation_metrics"][
-                        "overall_metrics"]["macro_f1_score"]
-                ),
-                "dataset_size": (
-                    pretrained_metrics["validation_metrics"]["dataset_size"]
-                )
+                "cross_validation_f1_score": val_metrics_data.get("overall_metrics", {}).get("macro_f1_score"),
             }
 
-        if pretrained_metrics["test_metrics"]:
+        if test_metrics:
             summary["test"] = {
-                "accuracy": (
-                    pretrained_metrics["test_metrics"]["overall_metrics"][
-                        "accuracy"
-                    ]
-                ),
-                "f1_score": (
-                    pretrained_metrics["test_metrics"]["overall_metrics"][
-                        "macro_f1_score"
-                    ]
-                ),
-                "dataset_size": (
-                    pretrained_metrics["test_metrics"]["dataset_size"]
-                )
+                "accuracy": test_metrics["overall_metrics"].get("accuracy"),
+                "f1_score": test_metrics["overall_metrics"].get("macro_f1_score"),
+                "dataset_size": test_metrics.get("dataset_size")
             }
 
         return {
@@ -853,15 +759,9 @@ async def get_all_performance_metrics(config: str, request: Request = None):
                 "test": pretrained_metrics["test_metrics"]
             },
             "model_status": {
-                "training_data_available": (
-                    pretrained_metrics["training_metrics"] is not None
-                ),
-                "validation_data_available": (
-                    pretrained_metrics["validation_metrics"] is not None
-                ),
-                "test_data_available": (
-                    pretrained_metrics["test_metrics"] is not None
-                ),
+                "training_data_available": pretrained_metrics["training_metrics"] is not None,
+                "validation_data_available": pretrained_metrics["validation_metrics"] is not None,
+                "test_data_available": pretrained_metrics["test_metrics"] is not None,
                 "performance_analysis_complete": all([
                     pretrained_metrics["training_metrics"],
                     pretrained_metrics["test_metrics"]
@@ -870,9 +770,8 @@ async def get_all_performance_metrics(config: str, request: Request = None):
             "recommendations": {
                 "model_quality": (
                     "Production ready"
-                    if overfitting_analysis.get("generalization_quality")
-                    in ["Excellent", "Good"]
-                    else "Needs improvement"
+                    if summary.get("test", {}).get("accuracy", 0) > 0.70
+                    else "Review test metrics, may need improvement"
                 ),
                 "above_random_performance": (
                     overfitting_analysis.get("vs_random_guessing", {})
@@ -907,7 +806,7 @@ async def get_available_models():
     available_models = {}
 
     for config in AVAILABLE_CONFIGS:
-        model_path = os.path.join(MODELS_DIR, f"svm_model_{config}.joblib")
+        model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
         available_models[config] = {
             "available": os.path.exists(model_path),
             "path": model_path
@@ -924,7 +823,7 @@ async def pipeline_health_check():
     available_count = 0
     available_models = []
     for config in AVAILABLE_CONFIGS:
-        model_path = os.path.join(MODELS_DIR, f"svm_model_{config}.joblib")
+        model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
         if os.path.exists(model_path):
             available_count += 1
             available_models.append(config)

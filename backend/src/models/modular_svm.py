@@ -1017,13 +1017,11 @@ def main_svm() -> None:
                         X_hp_train_svm, y_hp_train_svm = shuffle(
                             X_hp_train_svm, y_hp_train_svm, random_state=42
                         )
+                        svm_pipeline.set_params(feature_selection__k='all')
                         svm_param_dist = {
                             "svm__estimator__C": uniform(0.1, 50),
                             "svm__estimator__gamma": [1e-5, 1e-4, 1e-3, 1e-2,
                                                       0.1, "scale", "auto"],
-                            "feature_selection__k": randint(
-                                10, X_hp_train_svm.shape[1] + 1),
-                            "pca__n_components": [0.9, 0.95, 0.99, None]
                         }
                         best_svm_estimator, cv_results = (
                             _train_svm_with_randomizedsearch(

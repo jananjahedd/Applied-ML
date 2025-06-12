@@ -147,7 +147,6 @@ if st.session_state.get("running_pipeline"):
     st.subheader(" Pipeline Results")
     st.divider()
     for file_id, results in st.session_state.running_pipeline.items():
-        st.divider()
         st.markdown(f"For File ID: {file_id}")
         print_pipeline_summary(results)
 
