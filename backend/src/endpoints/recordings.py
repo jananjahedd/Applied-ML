@@ -266,6 +266,38 @@ async def get_recording_by_id(recording_id: int) -> Recording:
     summary="Upload a new recording",
     response_model=ResponseMessage,
     description="Upload a new recording file along with its annotation file.",
+    responses={
+        HTTP_200_OK: {
+            "description": "Recording and annotation files uploaded successfully.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "✅ Recording 'SC4ssNEO-PSG.edf' and annotation 'SC4ssNEO-Hypnogram.edf' uploaded successfully."
+                    }
+                }
+            }
+        },
+        HTTP_400_BAD_REQUEST: {
+            "description": "Invalid file names or files already exist.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid EDF file name: SC4ssNEO-PSG.edf. Files should be named in the form SC4ssNEO-PSG.edf or ST7ssNJ0-PSG.edf."
+                    }
+                }
+            }
+        },
+        HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Error processing recording files: <error_message>"
+                    }
+                }
+            }
+        }
+    }
 )
 async def upload_recording(
         edf_file: UploadFile = File(None, description="EDF recording file"),
