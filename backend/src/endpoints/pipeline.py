@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Request, status
 from sklearn.pipeline import Pipeline as SklearnPipeline
 from src.endpoints.files import selected_filenames
 
-from src.schemas import (
+from src.schemas.schemas import (
     ResponseMessage,
     # PreprocessingOutput,
     # UploadResponse,

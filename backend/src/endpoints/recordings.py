@@ -4,7 +4,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
-from src.schemas import AvailableRecordings, Patient, RecordingSummary, Recording, ResponseMessage
+from src.schemas.schemas import AvailableRecordings, Patient, RecordingSummary, Recording, ResponseMessage
 from src.utils.patient import patient_from_filepath
 from src.utils.recording import Recording as RecordingUtil, is_valid_annotation_name, is_valid_edf_name
 
