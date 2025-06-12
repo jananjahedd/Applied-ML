@@ -7,7 +7,6 @@ from typing import Any, Dict
 import mne  # type: ignore
 
 from src.utils.logger import get_logger
-from src.utils.recording import Recording
 
 logger = get_logger(__name__)
 
@@ -26,17 +25,15 @@ class Patient:
         number (int): Patient number
         age (int): Age of the patient
         sex (Sex): Sex of the patient
-        recordings Dict[Recording]: Dictionary of recordings associated with the patient
     """
 
-    def __init__(self, number: int, age: int, sex: str, recordings: Dict[int, Recording]):
+    def __init__(self, number: int, age: int, sex: str):
         """Initialize the Patient class.
 
         Args:
             number (int): Patient number
             age (int): Age of the patient
             sex (str): Sex of the patient
-            recordings (Dict[Recording]): Dictionary of recordings associated with the patient
         """
         try:
             sex_enum = Sex(sex.capitalize())
@@ -46,7 +43,6 @@ class Patient:
         self.number = number
         self.age = age
         self.sex = sex_enum
-        self.recordings = recordings
 
     def __repr__(self) -> str:
         """Return a string representation of the Patient class.
@@ -70,7 +66,6 @@ class Patient:
             "number": self.number,
             "age": self.age,
             "sex": self.sex.value,
-            "recordings": {k: v.dict() for k, v in self.recordings.items()},
         }
 
 
@@ -112,5 +107,4 @@ def patient_from_filepath(file_path: str) -> Patient:
         number=int(number),
         age=patient_info["last_name"].split("yr")[0],
         sex=patient_info["first_name"],
-        recordings={1: Recording(file_path)},
     )
