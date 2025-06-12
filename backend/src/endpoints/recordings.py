@@ -1,11 +1,12 @@
 from glob import glob
+from os.path import exists
 from typing import Any, Dict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.schemas import AvailableRecordings, Patient, RecordingSummary, Recording, ResponseMessage
 from src.utils.patient import patient_from_filepath
-from src.utils.recording import Recording as RecordingUtil
+from src.utils.recording import Recording as RecordingUtil, is_valid_annotation_name, is_valid_edf_name
 
 router = APIRouter(prefix="/recordings", tags=["Recordings"])
 
@@ -243,7 +244,6 @@ async def get_recording_by_id(recording_id: int) -> Recording:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid recording ID")
 
     all_recordings_flat = {**all_recordings["cassette_files"], **all_recordings["telemetry_files"]}
-    print(all_recordings_flat, recording_id)
     if recording_id not in all_recordings_flat:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Recording not found")
 
@@ -260,3 +260,65 @@ async def get_recording_by_id(recording_id: int) -> Recording:
             sex=patient_info.sex.value,
         )
     )
+
+@router.post(
+    "/upload",
+    summary="Upload a new recording",
+    response_model=ResponseMessage,
+    description="Upload a new recording file along with its annotation file.",
+)
+async def upload_recording(
+        edf_file: UploadFile = File(None, description="EDF recording file"),
+        hypno_file: UploadFile = File(None, description="EDF annotation file")
+) -> ResponseMessage:
+    """
+    Upload a new recording file along with its annotation file.
+    """
+    # check if both files are named correctly
+    edf_name, hypno_name = str(edf_file.filename), str(hypno_file.filename)
+    if not is_valid_edf_name(edf_name):
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"Invalid EDF file name: {edf_file.filename}. Files should be named in the form SC4ssNEO-PSG.edf or ST7ssNJ0-PSG.edf."
+        )
+    if not is_valid_annotation_name(hypno_name):
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"Invalid annotation file name: {hypno_file.filename}. Files should be named in the form SC4ssNEO-Hypnogram.edf or ST7ssNJ0-Hypnogram.edf."
+        )
+
+    # Check if patient number and night match in both files
+    if edf_name[:6] != hypno_name[:6]:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="EDF file and annotation file do not match. Ensure both files have the same patient number and night."
+        )
+
+    # Check if files already exist
+    edf_path = f"{CASSETTE_DATA_DIR}/{edf_name}"
+    hypno_path = f"{CASSETTE_DATA_DIR}/{hypno_name}"
+    if exists(edf_path) or exists(hypno_path):
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"Files with the same name already exist: {edf_name} or {hypno_name}. Please rename your files."
+        )
+
+    # Save the uploaded files
+    with open(edf_path, "wb") as edf_out:
+        edf_out.write(await edf_file.read())
+    with open(hypno_path, "wb") as hypno_out:
+        hypno_out.write(await hypno_file.read())
+
+    # Create a Recording object to validate the files
+    try:
+        recording = RecordingUtil(edf_path)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail=f"Error processing recording files: {str(e)}"
+        )
+
+    return ResponseMessage(
+        message=f"✅ Recording '{recording.file_path}' and annotation '{recording.anno_path}' uploaded successfully."
+    )
+

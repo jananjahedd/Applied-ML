@@ -91,3 +91,25 @@ class Recording:
         """Visualize the recording."""
         raw_data = read_raw_edf(self.file_path, preload=True, verbose=False)
         plot_signals_mne(recording=self, raw=raw_data, annotations=True)
+
+def is_valid_edf_name(file_name: str) -> bool:
+    """Check if the file name is a valid EDF file name.
+
+    Args:
+        file_name (str): The file name to check.
+
+    Returns:
+        bool: True if the file name is valid, False otherwise.
+    """
+    return file_name.startswith(("ST7", "SC4")) and file_name.endswith(".edf")
+
+def is_valid_annotation_name(file_name: str) -> bool:
+    """Check if the file name is a valid annotation file name.
+
+    Args:
+        file_name (str): The file name to check.
+
+    Returns:
+        bool: True if the file name is valid, False otherwise.
+    """
+    return file_name.endswith("Hypnogram.edf") and any(file_name.startswith(prefix) for prefix in ("ST7", "SC4"))
