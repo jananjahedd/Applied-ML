@@ -78,7 +78,7 @@ def preprocess_edf_for_api(
     annotations_loaded = False
     if hypno_path and os.path.exists(hypno_path):
         try:
-            temp_annots = mne.read_annotations(hypno_path, verbose=False)
+            temp_annots = mne.read_annotations(hypno_path)
             raw.set_annotations(temp_annots, emit_warning=False)
             annotations_loaded = True
             logger.info(f"Annotations loaded from {hypno_path}")
