@@ -2,44 +2,139 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
-
 class ResponseMessage(BaseModel):
-    message: str
-
-
-class FileDetail(BaseModel):
-    id: int
-    name: str
-
-
-class AvailableFilesResponse(BaseModel):
-    cassette_files: Dict[str, str] = Field(
+    message: str = Field(
         ...,
-        description="Cassette EDF files with ID as key and filename as value",
-        json_schema_extra={"example": {"1": "SC4171E0-PSG.edf", "2": "SC4172E0-PSG.edf"}}
+        description="Response message from the API",
     )
-    telemetry_files: Dict[str, str] = Field(
+
+class Homepage(BaseModel):
+    message: str = Field(
         ...,
-        description="Telemetry EDF files with ID as key and filename as value",
-        json_schema_extra={"example": {"3": "ST7052J0-PSG.edf", "4": "ST7053J0-PSG.edf"}}
+        description="Welcome message for the API",
+    )
+    version: str = Field(
+        ...,
+        description="Version of the API",
+    )
+    endpoints: Dict[str, str] = Field(
+        ...,
+        description="List of available endpoints in the API",
+    )
+
+
+class Patient(BaseModel):
+    number: int = Field(
+        ...,
+        description="Internal numeric ID of the patient",
+        json_schema_extra={"example": 10}
+    )
+    age: int = Field(
+        ...,
+        description="Age of the patient",
+        json_schema_extra={"example": 45}
+    )
+    sex: str = Field(
+        ...,
+        description="Sex of the patient",
+        json_schema_extra={"example": "Male"}
+    )
+
+
+class RecordingSummary(BaseModel):
+    recording_path: str = Field(
+        ...,
+        description="Path to the recording file",
+        json_schema_extra={"recording_path": "example-data/sleep-cassette/SC4171E0-PSG.edf"}
+    )
+    annotation_path: str = Field(
+        ...,
+        description="Path to the annotation file",
+        json_schema_extra={"annotation_path": "example-data/sleep-cassette/SC4171E0-Hypnogram.edf"}
+    )
+    study_type: str = Field(
+        ...,
+        description="Type of study (Cassette or Telemetry)",
+        json_schema_extra={"study_type": "Cassette"}
+    )
+   
+class Recording(BaseModel):
+    recording_path: str = Field(
+        ...,
+        description="Path to the recording file",
+        json_schema_extra={"recording_path": "example-data/sleep-cassette/SC4171E0-PSG.edf"}
+    )
+    annotation_path: str = Field(
+        ...,
+        description="Path to the annotation file, if available",
+        json_schema_extra={"annotation_path": "example-data/sleep-cassette/SC4171E0-Hypnogram.edf"}
+    )
+    study_type: str = Field(
+        ...,
+        description="Type of study (Cassette or Telemetry)",
+        json_schema_extra={"study_type": "Cassette"}
+    )
+    night: int = Field(
+        ...,
+        description="Night number of the recording",
+        json_schema_extra={"night": 1}
+    )
+    patient: Patient = Field(
+        ...,
+        description="Patient information associated with the recording",
+        json_schema_extra={
+            "patient": {
+                "number": 10,
+                "age": 45,
+                "sex": "Male"
+            }
+        }
+    )
+
+class AvailableRecordings(BaseModel):
+    cassette_files: Dict[int, RecordingSummary] = Field(
+        ...,
+        description="Cassette files, file_path and annotations_path",
+        json_schema_extra={
+            "example": {
+                "1": {
+                    "recording_path": "example-data/sleep-cassette/SC4171E0-PSG.edf",
+                    "annotation_path": "example-data/sleep-cassette/SC4171E0-Hypnogram.edf"
+                },
+            }
+        }
+    )
+    telemetry_files: Dict[int, RecordingSummary] = Field(
+        ...,
+        description="Telemetry files, file_path and annotations_path",
+        json_schema_extra={
+            "example": {
+                "1": {
+                    "recording_path": "example-data/sleep-telemetry/ST70001N0-PSG.edf",
+                    "annotation_path": "example-data/sleep-telemetry/ST70001N0-Hypnogram.edf"
+                },
+            }
+        }
     )
 
 
 class SelectedFileDetail(BaseModel):
-    id: str
-    path: str
+    edf_path: str = Field(...)
+    hypno_path: Optional[str] = Field(None)
 
 
 class SelectedFilesResponse(BaseModel):
-    selected_files: Dict[str, str] = Field(
+    selected_files: Dict[str, SelectedFileDetail] = Field(
         ...,
-        description="Selected files with ID as key and full path as value",
-        json_schema_extra={"example": {
-            "1": "example-data/sleep-cassette/SC4171E0-PSG.edf",
-            "2": "example-data/sleep-cassette/SC4172E0-PSG.edf"
-        }}
+        description="Selected files with ID as keys and full path as value",
+        json_schema_extra={
+            "example": {
+                "1": {"edf_path": "example-data/sleep-cassette/SC4171E0-PSG.edf", "hypno_path": "example-data/sleep-cassette/SC4171E0-Hypnogram.edf"},
+                "2": {"edf_path": "example-data/sleep-cassette/SC4172E0-PSG.edf", "hypno_path": None}
+            }
+        }
     )
-    total_selected: int
+    total_selected: int = Field(...)
 
 
 class PatientInfo(BaseModel):
