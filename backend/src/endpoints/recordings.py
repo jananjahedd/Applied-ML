@@ -54,7 +54,7 @@ def _get_all_recordings() -> Dict:
             "content": {
                 "application/json": {
                     "example": {
-                        "message": "Recordings directory is not set or does not exist."
+                        "message": "⚠️ Recordings directory is not set or does not exist."
                     }
                 }
             }
@@ -71,7 +71,7 @@ def health_check() -> Any:
     if not (CASSETTE_DATA_DIR and TELEMETRY_DATA_DIR):
         raise HTTPException(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Recordings directory is not set or does not exist."
+            detail="⚠️ Recordings directory is not set or does not exist."
         )
 
     # check if each reacording has a corresponding annotation file
@@ -84,12 +84,12 @@ def health_check() -> Any:
         except IndexError:
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Invalid cassette file name format: {file}. Files are named in the form SC4ssNEO-PSG.edf where ss is the subject number, and N is the night."
+                detail=f"⚠️ Invalid cassette file name format: {file}. Files are named in the form SC4ssNEO-PSG.edf where ss is the subject number, and N is the night."
             )
         if not glob(f"{CASSETTE_DATA_DIR}/SC4{number}*-Hypnogram.edf"):
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Missing annotation file for cassette recording: {file}"
+                detail=f"⚠️ Missing annotation file for cassette recording: {file}"
             )
 
     for file in telemetry_files:
@@ -98,12 +98,12 @@ def health_check() -> Any:
         except IndexError:
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Invalid telemetry file name format: {file}. Files are named in the form ST7ssNJ0-PSG.edf where ss is the subject number, and N is the night."
+                detail=f"⚠️ Invalid telemetry file name format: {file}. Files are named in the form ST7ssNJ0-PSG.edf where ss is the subject number, and N is the night."
             )
         if not glob(f"{TELEMETRY_DATA_DIR}/ST7{number}*-Hypnogram.edf"):
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Missing annotation file for telemetry recording: {file}"
+                detail=f"⚠️ Missing annotation file for telemetry recording: {file}"
             )
     
     return ResponseMessage(
