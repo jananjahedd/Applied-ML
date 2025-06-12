@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from src.endpoints.files import router as files_router
 from src.endpoints.patient import router as patient_router
 from src.endpoints.pipeline import router as pipeline_router
 from src.schemas import ResponseMessage
@@ -79,7 +78,6 @@ async def health_check():
     return ResponseMessage(message="API is running successfully!")
 
 
-app.include_router(files_router)
 app.include_router(patient_router)
 app.include_router(pipeline_router)
 
