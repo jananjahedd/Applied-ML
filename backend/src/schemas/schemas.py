@@ -8,21 +8,6 @@ class ResponseMessage(BaseModel):
         description="Response message from the API",
     )
 
-class Homepage(BaseModel):
-    message: str = Field(
-        ...,
-        description="Welcome message for the API",
-    )
-    version: str = Field(
-        ...,
-        description="Version of the API",
-    )
-    endpoints: Dict[str, str] = Field(
-        ...,
-        description="List of available endpoints in the API",
-    )
-
-
 class Patient(BaseModel):
     number: int = Field(
         ...,
