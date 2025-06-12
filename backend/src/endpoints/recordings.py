@@ -34,33 +34,6 @@ def _get_all_recordings() -> Dict:
         "telemetry_files": telemetry_files_dict
     }
 
-@router.get(
-    "/health",
-    summary="Health check for available recordings",
-    description="Check if the recordings directory is accessible, each recording file is readable and has a corresponding annotation file.",
-    responses={
-        HTTP_200_OK: {
-            "description": "All recordings are accessible and have corresponding annotation files.",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "message": "✅ All recordings are accessible and have corresponding annotation files."
-                    }
-                }
-            }
-        },
-        HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "Internal Server Error",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "message": "⚠️ Recordings directory is not set or does not exist."
-                    }
-                }
-            }
-        }
-    }
-)
 def health_check() -> Any:
     """
     Health check for available recordings.
