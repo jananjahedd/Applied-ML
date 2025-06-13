@@ -1,28 +1,17 @@
-"""Module for the entire pipeline endpoints."""
 import os
 import tempfile
 import re
-import json
 from typing import Dict, List, Optional, Any, Tuple
 import joblib
 import numpy as np
 import mne
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, status
+import json
+from fastapi import APIRouter, HTTPException, Request, status, UploadFile, File
 from sklearn.pipeline import Pipeline as SklearnPipeline
-from src.endpoints.files import selected_filenames
-
-from src.schemas.schemas import (
-    ResponseMessage,
-    # PreprocessingOutput,
-    # UploadResponse,
-    # PredictionInput,
-    # PredictionOutput,
-    PredictEDFResponse
-)
 
 from src.features.feature_engineering import FeatureEngineering
+from src.schemas.base import ResponseMessage
 from src.utils.logger import get_logger
-
 from src.data.preprocessing import (
     bandpass_filter,
     notch_filter,
@@ -35,14 +24,17 @@ from src.data.preprocessing import (
     EOG_BANDPASS,
     EMG_BANDPASS
 )
+from src.schemas.model_schemas import ModelConfig, AvailableModels, ModelDetails, ModelPerformanceResponse, ModelPerformanceSummary, OverfittingAnalysis
+from src.schemas.prediction_schemas import PredictEDFResponse
+from src.endpoints.recordings import get_all_recordings
 
-logger = get_logger("pipeline")
+router = APIRouter(prefix="/models", tags=["Models"])
 
-router = APIRouter(prefix="/pipeline", tags=["ML Pipeline"])
-
-MODELS_DIR = "results"
+MODELS_DIR = "../results"
 AVAILABLE_CONFIGS = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
-DEFAULT_CONFIG = "eeg_emg"
+DEFAULT_CONFIG = ModelConfig.EEG_EMG_EOG
+
+logger = get_logger("models_endpoint")
 
 
 def preprocess_edf_for_api(
@@ -478,195 +470,104 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
         return {"training_metrics": None, "validation_metrics": None,
                 "test_metrics": None}
 
+def health_check():
+    available_count = 0
+    available_models = []
+    for config in AVAILABLE_CONFIGS:
+        model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
+        if os.path.exists(model_path):
+            available_count += 1
+            available_models.append(config)
 
-@router.post("/predict-edf", response_model=PredictEDFResponse)
-async def predict_edf_file(
-    request: Request,
-    edf_file: Optional[UploadFile] = File(None, description="EDF sleep recording file"),
-    hypno_file: Optional[UploadFile] = File(
-        None, description="Optional hypnogram file for better epoch creation"
-    ),
-    config: str = DEFAULT_CONFIG,
-    edf_path_internal: Optional[str] = None
-):
-    """
-    Complete Automated Sleep Stage Prediction Pipeline.
-    This endpoint can be triggered by a direct file upload or internally with a server file path.
-    Model Performance (Validation Set):
-     - Accuracy: ~60% vs 20% random guessing (5-class problem)
-     - Tested on 10 subjects
-     - Significantly outperforms random classification
-
-    Just upload or select your EDF file and get sleep stage predictions!
-
-    This endpoint automatically:
-     1. Uploads and validates your EDF file
-     2. Preprocesses using proven clinical pipeline
-     3. Extracts sleep-relevant features from EEG/EOG/EMG
-     4. Predicts sleep stages using trained SVM models
-     5. Returns detailed predictions with confidence scores
-
-    Input: EDF file (+ optional hypnogram)
-    Output: Sleep stage predictions for every 30-second epoch
-
-    Supported configurations:
-     - `eeg`: EEG channels only
-     - `eeg_emg`: EEG + EMG (good for REM detection)
-     - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
-     - `eeg_emg_eog`: All channels (most comprehensive, default)
-    """
-    edf_path = edf_path_internal
-    hypno_path = None
-    input_filename = ""
-    temp_dir_manager = tempfile.TemporaryDirectory()
-    temp_dir = temp_dir_manager.name
-
-    try:
-        if edf_path:
-            input_filename = os.path.basename(edf_path)
-            # If a hypnogram is provided with an internal edf, it must also be a path
-            # (This logic assumes hypno_file is an UploadFile, adjust if needed)
-            if hypno_file and hypno_file.filename:
-                hypno_path = os.path.join(temp_dir, hypno_file.filename)
-                with open(hypno_path, "wb") as f:
-                    content = await hypno_file.read()
-                    f.write(content)
-
-        elif edf_file:
-            if not edf_file.filename or not edf_file.filename.lower().endswith('.edf'):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="File must be an EDF file with .edf extension"
-                )
-            input_filename = edf_file.filename
-            edf_path = os.path.join(temp_dir, input_filename)
-            with open(edf_path, "wb") as f:
-                content = await edf_file.read()
-                f.write(content)
-
-            if hypno_file and hypno_file.filename:
-                hypno_path = os.path.join(temp_dir, hypno_file.filename)
-                with open(hypno_path, "wb") as f:
-                    content = await hypno_file.read()
-                    f.write(content)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No EDF file or internal path provided."
-            )
-
-        logger.info(
-            f"Starting automated prediction pipeline for {input_filename} using {config} configuration"
-        )
-
-        logger.info("Step 1/4: Preprocessing EDF data...")
-        epochs, annotations_loaded = preprocess_edf_for_api(edf_path, hypno_path)
-        logger.info(f"Preprocessing complete. Created {len(epochs)} epochs of {EPOCH_DURATION}s each.")
-
-        logger.info(f"Step 2/4: Extracting features for {config} configuration...")
-        features, feature_names = extract_features_for_config(epochs, config)
-        logger.info(f"Feature extraction complete. Extracted {features.shape[1]} features per epoch.")
-
-        logger.info("Step 3/4: Loading trained model and making predictions...")
-        model = load_model(config)
-        predictions = model.predict(features)
-        logger.info(f"Predictions complete for {len(predictions)} epochs.")
-
-        logger.info("Step 4/4: Generating confidence scores and formatting results...")
-        probabilities_per_segment = None
-        if hasattr(model, 'predict_proba'):
-            probabilities_per_segment = model.predict_proba(features).tolist()
-
-        if hasattr(request.app.state, 'label_mapping'):
-            label_mapping = request.app.state.label_mapping
-            prediction_labels = [label_mapping.get(pred, f"Unknown_{pred}") for pred in predictions]
-            class_labels_legend = label_mapping
-        else:
-            prediction_labels = [f"Class_{pred}" for pred in predictions]
-            class_labels_legend = None
-
-        unique_stages, counts = np.unique(prediction_labels, return_counts=True)
-        stage_distribution = dict(zip(unique_stages, counts.tolist()))
-        total_time_hours = len(predictions) * EPOCH_DURATION / 3600
-
-        current_file_metrics = None
-        if annotations_loaded and hasattr(epochs, 'events') and epochs.events is not None:
-            logger.info("Ground truth available - calculating performance metrics on current file...")
-            try:
-                ground_truth = epochs.events[:, -1]
-                current_file_metrics = evaluate_model_on_data(model, features, ground_truth, config, request)
-                current_file_metrics["note"] = "Performance metrics calculated on the uploaded file with ground truth annotations."
-            except Exception as e:
-                logger.warning(f"Could not calculate metrics on current file: {e}")
-
-        logger.info("Complete pipeline finished successfully!")
-        logger.info(f"Sleep stage distribution: {stage_distribution}")
-        logger.info(f"Total recording time: {total_time_hours:.1f} hours")
-
-        return PredictEDFResponse(
-            model_configuration_used=config,
-            input_file_name=input_filename,
-            num_segments_processed=len(predictions),
-            predictions=prediction_labels,
-            prediction_ids=predictions.tolist(),
-            probabilities_per_segment=probabilities_per_segment,
-            class_labels_legend=class_labels_legend,
-            processing_summary={
-                "total_recording_time_hours": round(total_time_hours, 2),
-                "epoch_duration_seconds": EPOCH_DURATION,
-                "annotations_from_hypnogram": annotations_loaded,
-                "features_extracted_per_epoch": features.shape[1],
-                "sleep_stage_distribution": stage_distribution,
-                "current_file_performance": current_file_metrics
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error in complete EDF prediction pipeline: {e}")
+    if available_count == 0:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error in prediction pipeline: {str(e)}"
-        )
-    finally:
-        temp_dir_manager.cleanup()
-
-
-@router.post("/predict-selected-file/{file_id}", response_model=PredictEDFResponse)
-async def predict_selected_file(
-    file_id: str,
-    request: Request,
-    config: str = DEFAULT_CONFIG
-):
-    """
-    Triggers the prediction pipeline for a file that has been pre-selected
-    using the /files/select endpoint.
-    """
-    if file_id not in selected_filenames:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File ID '{file_id}' not found in selected files. Please select the file first via POST /files/select."
+            detail=(
+                "⚠️ No trained models available. Please ensure model files are"
+                + " in the 'results/' directory."
+            )
         )
 
-    file_path_to_process = selected_filenames[file_id]
-
-    if not os.path.exists(file_path_to_process):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File not found on server at path: {file_path_to_process}"
+    return ResponseMessage(
+        message=(
+            f"✅ ML Pipeline is healthy! {available_count}/"
+            f"{len(AVAILABLE_CONFIGS)} models ready: {available_models}"
         )
-
-    # use file path directly instead of UploadFile
-    return await predict_edf_file(
-        request=request,
-        config=config,
-        edf_file=None,  # No file upload
-        hypno_file=None,  # No hypnogram upload
-        edf_path_internal=file_path_to_process
     )
 
+@router.get(
+    "/",
+    summary="Get all available model configurations",
+    description="Returns a dictionary of available models and their configurations.",
+    response_model=AvailableModels,
+)
+def get_available_models():
+    """Checks for all possible model configurations and returns their availability."""
+    available_models = {}
+    try:
 
-@router.get("/all-performance/{config}", response_model=Dict[str, Any])
-async def get_all_performance_metrics(config: str, request: Request = None):
+        for config in ModelConfig:
+            model_path = os.path.join(MODELS_DIR, f"model_{config.value}.joblib")
+            available_models[config.value] = {
+                "available": os.path.exists(model_path),
+                "path": model_path,
+            }
+        return AvailableModels(
+            available_configurations=available_models,
+            default_configuration=DEFAULT_CONFIG,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"⚠️ Error checking model availability: {str(e)}"
+        )
+
+@router.get(
+    "/{model_id}",
+    summary="Get detailed metadata for a specific model",
+    description="Provides key information about a model, including its expected inputs and a performance summary.",
+    response_model=ModelDetails,
+)
+def get_model_details(model_id: ModelConfig, request: Request):
+    """Retrieves detailed metadata for a single specified model configuration."""
+    model_path = os.path.join(MODELS_DIR, f"model_{model_id.value}.joblib")
+    if not os.path.exists(model_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model file not found for configuration '{model_id.value}'",
+        )
+
+    modalities = model_id.value.split('_')
+    
+    feature_counts = {
+        ModelConfig.EEG: 16,
+        ModelConfig.EEG_EMG: 30,
+        ModelConfig.EEG_EOG: 35,
+        ModelConfig.EEG_EMG_EOG: 49,
+    }
+
+    metrics = load_pretrained_metrics(model_id.value)
+    test_metrics_data = metrics.get("test_metrics")
+    
+    performance_summary = None
+    if test_metrics_data:
+        performance_summary = ModelPerformanceSummary(
+            test_accuracy=test_metrics_data.get("overall_metrics", {}).get("accuracy"),
+            test_macro_f1_score=test_metrics_data.get("overall_metrics", {}).get("macro_f1_score"),
+        )
+
+    class_labels = getattr(request.app.state, 'label_mapping', {})
+
+    return ModelDetails(
+        config_name=model_id,
+        modalities_used=modalities,
+        expected_features_count=feature_counts.get(model_id, 0),
+        class_labels_legend=class_labels,
+        performance_summary=performance_summary,
+    )
+
+@router.get("/{model_id}/performance", response_model=Dict[str, Any])
+async def get_model_performance(model_id: ModelConfig):
     """
     Get Complete Performance Analysis for the Random Forest model.
 
@@ -676,6 +577,7 @@ async def get_all_performance_metrics(config: str, request: Request = None):
     - Test metrics (final unseen data performance)
     - Model comparison and overfitting analysis
     """
+    config = model_id.value
     if config not in AVAILABLE_CONFIGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -800,141 +702,137 @@ async def get_all_performance_metrics(config: str, request: Request = None):
             detail=f"Error loading performance metrics: {str(e)}"
         )
 
-
-@router.get("/available-models", response_model=Dict[str, Any])
-async def get_available_models():
-    available_models = {}
-
-    for config in AVAILABLE_CONFIGS:
-        model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
-        available_models[config] = {
-            "available": os.path.exists(model_path),
-            "path": model_path
-        }
-
-    return {
-        "available_configurations": available_models,
-        "default_configuration": DEFAULT_CONFIG
-    }
-
-
-@router.get("/health", response_model=ResponseMessage)
-async def pipeline_health_check():
-    available_count = 0
-    available_models = []
-    for config in AVAILABLE_CONFIGS:
-        model_path = os.path.join(MODELS_DIR, f"model_{config}.joblib")
-        if os.path.exists(model_path):
-            available_count += 1
-            available_models.append(config)
-
-    if available_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "No trained models available. Please ensure model files are"
-                + " in the 'results/' directory."
-            )
-        )
-
-    return ResponseMessage(
-        message=(
-            f"ML Pipeline is healthy! {available_count}/"
-            f"{len(AVAILABLE_CONFIGS)} models ready: {available_models}"
-        )
-    )
-
-
-@router.post("/test-prediction", response_model=Dict[str, Any])
-async def test_model_prediction(
-    config: str = DEFAULT_CONFIG,
-    request: Request = None
+@router.post("/{model_id}/predict/{recording_id}", response_model=PredictEDFResponse)
+async def predict_from_recording(
+    model_id: ModelConfig,
+    recording_id: int,
+    request: Request,
 ):
     """
-    Test the ML pipeline with synthetic data
+    Complete Automated Sleep Stage Prediction Pipeline.
+    This endpoint can be triggered by a direct file upload or internally with a server file path.
+    Model Performance (Validation Set):
+     - Accuracy: ~60% vs 20% random guessing (5-class problem)
+     - Tested on 10 subjects
+     - Significantly outperforms random classification
 
-    This endpoint lets you test if a model configuration works without
-    uploading real EDF files.
-    It generates synthetic features and returns a prediction to verify the
-    model is working.
+    Just upload or select your EDF file and get sleep stage predictions!
 
-    Useful for:
-    - Testing if models are loaded correctly
-    - Checking model configurations
-    - API debugging and development
+    This endpoint automatically:
+     1. Uploads and validates your EDF file
+     2. Preprocesses using proven clinical pipeline
+     3. Extracts sleep-relevant features from EEG/EOG/EMG
+     4. Predicts sleep stages using trained Random Forest models
+     5. Returns detailed predictions with confidence scores
+
+    Input: EDF file (+ optional hypnogram)
+    Output: Sleep stage predictions for every 30-second epoch
+
+    Supported configurations:
+     - `eeg`: EEG channels only
+     - `eeg_emg`: EEG + EMG (good for REM detection)
+     - `eeg_eog`: EEG + EOG (good for eye movement artifacts)
+     - `eeg_emg_eog`: All channels (most comprehensive, default)
     """
-    if config not in AVAILABLE_CONFIGS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Invalid configuration '{config}'. "
-                f"Available: {AVAILABLE_CONFIGS}"
-            )
-        )
+    config = model_id.value
 
     try:
-        model = load_model(config)
+        all_recordings = get_all_recordings()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Error processing recordings: {str(e)}")
 
-        feature_counts = {
-            "eeg": 16,
-            "eeg_emg": 30,
-            "eeg_eog": 35,
-            "eeg_emg_eog": 19
-        }
+    all_recordings_flat = {**all_recordings["cassette_files"], **all_recordings["telemetry_files"]}
+    if recording_id not in all_recordings_flat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recording not found")
 
-        n_features = feature_counts.get(config, 30)
-        synthetic_features = np.random.rand(1, n_features)
+    recording = all_recordings_flat[recording_id]
+    edf_path = recording.file_path
+    hypno_path = recording.anno_path
+    input_filename = ""
+    temp_dir_manager = tempfile.TemporaryDirectory()
+    temp_dir = temp_dir_manager.name
 
-        prediction_id = model.predict(synthetic_features)[0]
-
-        confidence_score = None
-        class_probabilities = None
-        if hasattr(model, 'predict_proba'):
-            probabilities = model.predict_proba(synthetic_features)[0]
-            confidence_score = float(np.max(probabilities))
-
-            if request and hasattr(request.app.state, 'label_mapping'):
-                label_mapping = request.app.state.label_mapping
-                class_probabilities = {
-                    label_mapping.get(i, f"Class_{i}"): float(prob)
-                    for i, prob in enumerate(probabilities)
-                }
-
-        if request and hasattr(request.app.state, 'label_mapping'):
-            label_mapping = request.app.state.label_mapping
-            prediction_label = label_mapping.get(
-                prediction_id, f"Unknown_{prediction_id}"
-            )
-        else:
-            prediction_label = f"Class_{prediction_id}"
-
-        return {
-            "status": "success",
-            "message": f"Model '{config}' is working correctly!",
-            "test_results": {
-                "model_configuration": config,
-                "synthetic_features_count": n_features,
-                "predicted_sleep_stage": prediction_label,
-                "prediction_id": int(prediction_id),
-                "confidence_score": confidence_score,
-                "class_probabilities": class_probabilities
-            },
-            "note": (
-                "This was a test with synthetic data. Upload real EDF"
-                + " files using /predict-edf for actual predictions."
-            )
-        }
-
-    except FileNotFoundError as e:
+    if not os.path.exists(edf_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Model file not found for configuration '{config}': {str(e)}"
-            )
+            detail=f"EDF file not found at path: {edf_path}"
         )
+
+    logger.info(
+            f"Starting automated prediction pipeline for {input_filename} using {config} configuration"
+        )
+
+
+    try:
+        logger.info("Step 1/4: Preprocessing EDF data...")
+        epochs, annotations_loaded = preprocess_edf_for_api(edf_path, hypno_path)
+        logger.info(f"Preprocessing complete. Created {len(epochs)} epochs of {EPOCH_DURATION}s each.")
+
+        logger.info(f"Step 2/4: Extracting features for {config} configuration...")
+        features, feature_names = extract_features_for_config(epochs, config)
+        logger.info(f"Feature extraction complete. Extracted {features.shape[1]} features per epoch.")
+
+        logger.info("Step 3/4: Loading trained model and making predictions...")
+        model = load_model(config)
+        predictions = model.predict(features)
+        logger.info(f"Predictions complete for {len(predictions)} epochs.")
+
+        logger.info("Step 4/4: Generating confidence scores and formatting results...")
+        probabilities_per_segment = None
+        if hasattr(model, 'predict_proba'):
+            probabilities_per_segment = model.predict_proba(features).tolist()
+
+        if hasattr(request.app.state, 'label_mapping'):
+            label_mapping = request.app.state.label_mapping
+            prediction_labels = [label_mapping.get(pred, f"Unknown_{pred}") for pred in predictions]
+            class_labels_legend = label_mapping
+        else:
+            prediction_labels = [f"Class_{pred}" for pred in predictions]
+            class_labels_legend = None
+
+        unique_stages, counts = np.unique(prediction_labels, return_counts=True)
+        stage_distribution = dict(zip(unique_stages, counts.tolist()))
+        total_time_hours = len(predictions) * EPOCH_DURATION / 3600
+
+        current_file_metrics = None
+        if annotations_loaded and hasattr(epochs, 'events') and epochs.events is not None:
+            logger.info("Ground truth available - calculating performance metrics on current file...")
+            try:
+                ground_truth = epochs.events[:, -1]
+                current_file_metrics = evaluate_model_on_data(model, features, ground_truth, config, request)
+                current_file_metrics["note"] = "Performance metrics calculated on the uploaded file with ground truth annotations."
+            except Exception as e:
+                logger.warning(f"Could not calculate metrics on current file: {e}")
+
+        logger.info("Complete pipeline finished successfully!")
+        logger.info(f"Sleep stage distribution: {stage_distribution}")
+        logger.info(f"Total recording time: {total_time_hours:.1f} hours")
+
+        return PredictEDFResponse(
+            model_configuration_used=config,
+            input_file_name=input_filename,
+            num_segments_processed=len(predictions),
+            predictions=prediction_labels,
+            prediction_ids=predictions.tolist(),
+            probabilities_per_segment=probabilities_per_segment,
+            class_labels_legend=class_labels_legend,
+            processing_summary={
+                "total_recording_time_hours": round(total_time_hours, 2),
+                "epoch_duration_seconds": EPOCH_DURATION,
+                "annotations_from_hypnogram": annotations_loaded,
+                "features_extracted_per_epoch": features.shape[1],
+                "sleep_stage_distribution": stage_distribution,
+                "current_file_performance": current_file_metrics
+            }
+        )
+
     except Exception as e:
-        logger.error(f"Error during model testing: {e}")
+        logger.error(f"Error in complete EDF prediction pipeline: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error testing model '{config}': {str(e)}"
+            detail=f"Error in prediction pipeline: {str(e)}"
         )
+    finally:
+        temp_dir_manager.cleanup()
+
