@@ -4,11 +4,11 @@ repos:
     hooks:
       - id: check-yaml
       - id: end-of-file-fixer
-        exclude: ^(example-data/|results/)
+        exclude: ^(example-data/|results/|backend/logs)
       - id: trailing-whitespace
-        exclude: ^(example-data/|results/)
+        exclude: ^(example-data/|results/|backend/logs)
       - id: check-added-large-files
-        exclude: ^(notebooks/|example-data/|results/)
+        exclude: ^(notebooks/|example-data/|results/|backend/logs)
       - id: check-merge-conflict
 
   - repo: https://github.com/psf/black
