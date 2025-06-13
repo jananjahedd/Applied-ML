@@ -1,12 +1,13 @@
 """Main application file for the FastAPI app."""
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from typing import Dict
+from fastapi import FastAPI, HTTPException
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from src.endpoints.patient import router as patient_router
-from src.endpoints.pipeline import router as pipeline_router
-from src.schemas import ResponseMessage
+from starlette.status import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
+from src.endpoints.recordings import router as recordings_router, health_check as recordings_health_check
+from src.endpoints.models import router as models_router, health_check as models_health_check
 
 # configuration
 LABEL_TO_NAME_MAPPING: dict[int, str] = {
@@ -49,7 +50,6 @@ app = FastAPI(
     description=(
         "API for EDF sleep recording processing, feature extraction, "
         "and sleep stage prediction using pre-trained SVM models. "
-        "Supports EDF file uploads for automatic preprocessing and prediction."
     ),
     version="1.0.3",
     lifespan=lifespan
@@ -61,25 +61,80 @@ origins = [
 ]
 
 
-@app.get("/", response_model=ResponseMessage, tags=["General"])
-async def read_root():
+@app.get("/", tags=["General"])
+def homepage() -> Dict[str, str | Dict[str, str]]:
     """Provides a welcome message and API status."""
-    return ResponseMessage(
-        message=(
-            "Welcome to the Sleep Stage Prediction API! "
-            "Use /docs to explore endpoints."
+    return {
+        "message":"Welcome to the Sleep Stage Prediction API!",
+        "version":"1.0.3",
+        "endpoints":{
+            "recordings": "/recordings -> See available recordings, and upload new ones",
+            "pipeline": "/pipeline -> Process EDF files and predict sleep stages",
+            "health_checks": "See individual endpoints for health checks",
+        },
+    }
+
+@app.get(
+    "/health",
+    tags=["General"],
+    summary="Health Check",
+    description="Endpoint to check the health of the API and its components.",
+    responses={
+        HTTP_200_OK: {
+            "description": "API is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "OK",
+                        "recordings": "OK"
+                    }
+                }
+            }
+        },
+        HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "ERROR",
+                        "recordings": "Failed to connect to recordings service"
+                    }
+                }
+            }
+        }
+    }
+)
+def health_check() -> Dict[str, str]:
+    """Health check endpoint to verify API is running."""
+    status = "OK"
+    recordings_response = None
+    models_response = None
+    error = None
+    try:
+        recordings_response = recordings_health_check()
+        models_response = models_health_check()
+    except Exception as e:
+        status = "ERROR"
+        error = str(e)
+
+    if status == "OK":
+        return {
+            "status": status,
+            "recordings": recordings_response.message if recordings_response else "OK",
+            "models": models_response.message if models_response else "OK"
+        }
+    else:
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "status": status,
+                "recordings": recordings_response.message if recordings_response else error,
+                "models": models_response.message if models_response else error
+            }
         )
-    )
 
-
-@app.get("/health", response_model=ResponseMessage, tags=["General"])
-async def health_check():
-    """General health check for the API."""
-    return ResponseMessage(message="API is running successfully!")
-
-
-app.include_router(patient_router)
-app.include_router(pipeline_router)
+app.include_router(recordings_router)
+app.include_router(models_router)
 
 
 app.add_middleware(
