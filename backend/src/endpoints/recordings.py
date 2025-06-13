@@ -11,8 +11,8 @@ from src.utils.recording import Recording as RecordingUtil, is_valid_annotation_
 
 router = APIRouter(prefix="/recordings", tags=["Recordings"])
 
-CASSETTE_DATA_DIR = f"example-data/sleep-cassette"
-TELEMETRY_DATA_DIR = f"example-data/sleep-telemetry"
+CASSETTE_DATA_DIR = f"../example-data/sleep-cassette"
+TELEMETRY_DATA_DIR = f"../example-data/sleep-telemetry"
 
 def get_all_recordings() -> Dict:
     try:
@@ -42,7 +42,7 @@ def health_check() -> Any:
     This endpoint checks if the recordings directory is accessible and if each recording file is readable.
     """
     # check if CASETTE_DATA_DIR and TELEMETRY_DATA_DIR exist
-    if not (CASSETTE_DATA_DIR and TELEMETRY_DATA_DIR):
+    if not (exists(CASSETTE_DATA_DIR) and exists(TELEMETRY_DATA_DIR)):
         raise HTTPException(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
             detail="⚠️ Recordings directory is not set or does not exist."
