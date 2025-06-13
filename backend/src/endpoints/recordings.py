@@ -4,7 +4,8 @@ from typing import Any, Dict
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
-from src.schemas.schemas import AvailableRecordings, Patient, RecordingSummary, Recording, ResponseMessage
+from src.schemas.base import ResponseMessage
+from src.schemas.recording_schemas import AvailableRecordings, Recording, RecordingSummary, Patient
 from src.utils.patient import patient_from_filepath
 from src.utils.recording import Recording as RecordingUtil, is_valid_annotation_name, is_valid_edf_name
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/recordings", tags=["Recordings"])
 CASSETTE_DATA_DIR = f"example-data/sleep-cassette"
 TELEMETRY_DATA_DIR = f"example-data/sleep-telemetry"
 
-def _get_all_recordings() -> Dict:
+def get_all_recordings() -> Dict:
     try:
         casette_paths = sorted(glob(f"{CASSETTE_DATA_DIR}/*-PSG.edf"))
         telemetry_paths = sorted(glob(f"{TELEMETRY_DATA_DIR}/*-PSG.edf"))
@@ -122,12 +123,12 @@ def health_check() -> Any:
         }
     }
 )
-def get_all_recordings() -> AvailableRecordings:
+def get_recordings() -> AvailableRecordings:
     """
     Retrieve a list of all recordings.
     """
     try:
-        all_recordings = _get_all_recordings()
+        all_recordings = get_all_recordings()
     except Exception as e:
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR,
                             detail=f"Error processing recordings: {str(e)}")
@@ -208,7 +209,7 @@ def get_all_recordings() -> AvailableRecordings:
 )
 async def get_recording_by_id(recording_id: int) -> Recording:
     try:
-        all_recordings = _get_all_recordings()
+        all_recordings = get_all_recordings()
     except Exception as e:
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR,
                             detail=f"Error processing recordings: {str(e)}")
