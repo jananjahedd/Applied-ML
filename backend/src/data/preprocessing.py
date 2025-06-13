@@ -264,7 +264,7 @@ def plot_epochs_mne(
     )
 
 
-def preprocess_pipeline():
+def preprocess_pipeline() -> None:
     """Main function to preprocess the raw data."""
     mne.set_log_level("INFO")
     start_time_total = time.time()

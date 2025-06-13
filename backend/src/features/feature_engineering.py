@@ -3,12 +3,12 @@
 Extracts the features from the preprocessed data.
 """
 
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
-import mne  # type: ignore
-import numpy as np  # type: ignore
-from numpy.typing import NDArray  # type: ignore
-from sklearn.exceptions import NotFittedError  # type: ignore
+import mne
+import numpy as np
+from numpy.typing import NDArray
+from sklearn.exceptions import NotFittedError
 
 from src.utils.logger import get_logger
 
@@ -50,7 +50,7 @@ class FeatureEngineering:
         psds: NDArray[np.float64],
         freqs: NDArray[np.float64],
         percentage: float = 0.95,
-    ) -> NDArray[np.float64]:
+    ) -> Any:
         """Calculate Spectral Edge Frequency (SEF).
 
         :param psds: power spectral densities.

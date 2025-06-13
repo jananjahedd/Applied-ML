@@ -165,7 +165,7 @@ def preprocess_edf_for_api(
 
 def extract_features_for_config(
         epochs: mne.Epochs, config: str
-) -> Tuple[np.ndarray, List[str]]:
+) -> Tuple[np.ndarray[Any, Any], List[str]]:
     modality_mapping = {
         "eeg": ["eeg"],
         "eeg_emg": ["eeg", "emg"],
@@ -240,9 +240,10 @@ def load_model(config: str) -> SklearnPipeline:
     except Exception as e:
         raise RuntimeError(f"Failed to load model: {e}")
 
-
-def evaluate_model_on_data(model, X_test, y_test, config: str,
-                           request: Request = None) -> Dict[str, Any]:
+def evaluate_model_on_data(model: SklearnPipeline, X_test: np.ndarray[Any, Any], 
+                           y_test: np.ndarray[Any, Any],
+                           config: str,
+                           request: Optional[Request] = None) -> Dict[str, Any]:
     from sklearn.metrics import (
         accuracy_score, precision_recall_fscore_support,
         confusion_matrix, roc_auc_score
@@ -364,7 +365,7 @@ def _parse_rf_classification_report(
             total_support = int(parts[-1])
 
     if total_support == 0:
-        total_support = sum(m["support"] for m in per_class_metrics.values())
+        total_support = sum(m["support"] for m in per_class_metrics.values()) # type: ignore
 
     return per_class_metrics, total_support
 
@@ -416,9 +417,9 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
                     )
                     weighted_recall += metrics["recall"] * metrics["support"]
                     weighted_f1 += metrics["f1_score"] * metrics["support"]
-                weighted_precision /= dataset_size
-                weighted_recall /= dataset_size
-                weighted_f1 /= dataset_size
+                weighted_precision /= dataset_size # type: ignore
+                weighted_recall /= dataset_size # type: ignore
+                weighted_f1 /= dataset_size # type: ignore
 
             return {
                 "dataset_size": dataset_size,
@@ -469,7 +470,7 @@ def load_pretrained_metrics(config: str) -> Dict[str, Any]:
         return {"training_metrics": None, "validation_metrics": None,
                 "test_metrics": None}
 
-def health_check():
+def health_check() -> ResponseMessage:
     available_count = 0
     available_models = []
     for config in AVAILABLE_CONFIGS:
@@ -500,7 +501,7 @@ def health_check():
     description="Returns a dictionary of available models and their configurations.",
     response_model=AvailableModels,
 )
-def get_available_models():
+def get_available_models() -> AvailableModels:
     """Checks for all possible model configurations and returns their availability."""
     available_models = {}
     try:
@@ -512,7 +513,7 @@ def get_available_models():
                 "path": model_path,
             }
         return AvailableModels(
-            available_configurations=available_models,
+            available_configurations=available_models, # type: ignore
             default_configuration=DEFAULT_CONFIG,
         )
     except Exception as e:
@@ -527,7 +528,7 @@ def get_available_models():
     description="Provides key information about a model, including its expected inputs and a performance summary.",
     response_model=ModelDetails,
 )
-def get_model_details(model_id: ModelConfig, request: Request):
+def get_model_details(model_id: ModelConfig, request: Request) -> ModelDetails:
     """Retrieves detailed metadata for a single specified model configuration."""
     model_path = os.path.join(MODELS_DIR, f"model_{model_id.value}.joblib")
     if not os.path.exists(model_path):
@@ -547,7 +548,7 @@ def get_model_details(model_id: ModelConfig, request: Request):
 
     metrics = load_pretrained_metrics(model_id.value)
     test_metrics_data = metrics.get("test_metrics")
-    
+
     performance_summary = None
     if test_metrics_data:
         performance_summary = ModelPerformanceSummary(
@@ -562,11 +563,11 @@ def get_model_details(model_id: ModelConfig, request: Request):
         modalities_used=modalities,
         expected_features_count=feature_counts.get(model_id, 0),
         class_labels_legend=class_labels,
-        performance_summary=performance_summary,
+        performance_summary=performance_summary, # type: ignore
     )
 
 @router.get("/{model_id}/performance", response_model=Dict[str, Any])
-async def get_model_performance(model_id: ModelConfig):
+async def get_model_performance(model_id: ModelConfig) -> Dict[str, Any]:
     """
     Get Complete Performance Analysis for the Random Forest model.
 
@@ -675,7 +676,7 @@ async def get_model_performance(model_id: ModelConfig):
                     else "Review test metrics, may need improvement"
                 ),
                 "above_random_performance": (
-                    overfitting_analysis.get("vs_random_guessing", {})
+                    overfitting_analysis.get("vs_random_guessing", {}) # type: ignore
                     .get("significantly_above_random", False)
                 ),
                 "next_steps": [
@@ -706,7 +707,7 @@ async def predict_from_recording(
     model_id: ModelConfig,
     recording_id: int,
     request: Request,
-):
+) -> PredictEDFResponse:
     """
     Complete Automated Sleep Stage Prediction Pipeline.
     This endpoint can be triggered by a direct file upload or internally with a server file path.

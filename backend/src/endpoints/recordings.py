@@ -14,7 +14,7 @@ router = APIRouter(prefix="/recordings", tags=["Recordings"])
 CASSETTE_DATA_DIR = f"../example-data/sleep-cassette"
 TELEMETRY_DATA_DIR = f"../example-data/sleep-telemetry"
 
-def get_all_recordings() -> Dict:
+def get_all_recordings() -> Dict[str, Dict[int, RecordingUtil]]:
     try:
         casette_paths = sorted(glob(f"{CASSETTE_DATA_DIR}/*-PSG.edf"))
         telemetry_paths = sorted(glob(f"{TELEMETRY_DATA_DIR}/*-PSG.edf"))
