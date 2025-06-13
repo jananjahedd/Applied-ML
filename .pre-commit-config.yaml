@@ -46,4 +46,13 @@ repos:
     hooks:
       - id: mypy
         args: [--strict, --show-error-codes]
-        additional_dependencies: [pandas, numpy, scikit-learn, mne]
+        additional_dependencies:
+          - pandas
+          - pandas-stubs
+          - numpy
+          - scikit-learn
+          - mne
+          - streamlit
+          - fastapi
+          - pytest
+          - types-requests
