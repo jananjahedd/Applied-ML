@@ -9,16 +9,13 @@ and saves the resulting data splits.
 import mne
 import numpy as np
 from numpy.typing import NDArray
-
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 # Data Augmentation Functions
-def gaussian_noise(
-    epochs: NDArray[np.float64], noise_level: float = 0.16
-) -> NDArray[np.float64]:
+def gaussian_noise(epochs: NDArray[np.float64], noise_level: float = 0.16) -> NDArray[np.float64]:
     """Adds Gaussian noise to the input EEG data.
 
     :param epochs: 2D numpy array of shape (n_channels, n_times)
@@ -27,10 +24,7 @@ def gaussian_noise(
     :return: 2D numpy array as `epochs` with added Gaussian noise.
     """
     if epochs.ndim != 2:
-        raise ValueError(
-            "epoch_data must have shape (n_channels, "
-            + f"n_times), but got shape {epochs.shape}"
-        )
+        raise ValueError("epoch_data must have shape (n_channels, " + f"n_times), but got shape {epochs.shape}")
     noise = np.random.normal(0, noise_level, epochs.shape)
     noisy_eeg = epochs + noise
     return noisy_eeg
@@ -44,10 +38,7 @@ def sign_flip(epochs: NDArray[np.float64]) -> NDArray[np.float64]:
     :return: 2D numpy array as `epochs` with flipped signs.
     """
     if epochs.ndim != 2:
-        raise ValueError(
-            "epoch_data must have shape (n_channels, n_times), "
-            + f"but got shape {epochs.shape}"
-        )
+        raise ValueError("epoch_data must have shape (n_channels, n_times), " + f"but got shape {epochs.shape}")
     return epochs * -1
 
 
@@ -59,18 +50,13 @@ def time_reverse(epochs: NDArray[np.float64]) -> NDArray[np.float64]:
     :return: 2D numpy array as `epochs` with the time axis reversed.
     """
     if epochs.ndim != 2:
-        raise ValueError(
-            "epoch_data must have shape (n_channels, n_times), "
-            + f"but got shape {epochs.shape}"
-        )
+        raise ValueError("epoch_data must have shape (n_channels, n_times), " + f"but got shape {epochs.shape}")
     reversed = np.flip(epochs, axis=1).copy()
     return reversed
 
 
 def create_epochs_from_numpy(
-    data_array: NDArray[np.float64],
-    labels_array: NDArray[np.float64],
-    info: mne.Info
+    data_array: NDArray[np.float64], labels_array: NDArray[np.float64], info: mne.Info
 ) -> mne.EpochsArray | None:
     """Helper function to create MNE EpochsArray from numpy arrays.
 
@@ -98,11 +84,7 @@ def create_epochs_from_numpy(
         )
     )
     try:
-        epochs = mne.EpochsArray(
-            data_array, info=info, events=events,
-            tmin=0.0, baseline=None,
-            verbose=False
-        )
+        epochs = mne.EpochsArray(data_array, info=info, events=events, tmin=0.0, baseline=None, verbose=False)
         return epochs
     except Exception as e:
         logger.error(f"Failed to create EpochsArray: {e}")
