@@ -11,6 +11,9 @@ from src.endpoints.models import router as models_router
 from src.endpoints.recordings import health_check as recordings_health_check
 from src.endpoints.recordings import router as recordings_router
 from starlette.status import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
+from glob import glob
+from fastapi import APIRouter
+from src.endpoints.recordings import CASSETTE_DATA_DIR, TELEMETRY_DATA_DIR
 
 # configuration
 LABEL_TO_NAME_MAPPING: dict[int, str] = {1: "Wake", 2: "N1", 3: "N2", 4: "N3", 5: "REM", 0: "Unknown/Movement"}
@@ -118,9 +121,54 @@ def health_check() -> Dict[str, str]:
             },
         )
 
+# --- START OF NEW DEBUGGING CODE ---
+
+debug_router = APIRouter()
+
+@debug_router.get("/debug-info", tags=["Debug"])
+def get_debug_info():
+    """
+    This endpoint provides live diagnostic information from within the container.
+    """
+    cassette_path = CASSETTE_DATA_DIR
+    telemetry_path = TELEMETRY_DATA_DIR
+
+    # Test what the glob pattern finds
+    cassette_glob_results = glob(f"{cassette_path}/*-PSG.edf")
+    telemetry_glob_results = glob(f"{telemetry_path}/*-PSG.edf")
+
+    # Test what os.listdir() finds (this is often more reliable)
+    try:
+        cassette_listdir = os.listdir(cassette_path)
+    except FileNotFoundError:
+        cassette_listdir = f"Directory NOT FOUND at: {cassette_path}"
+    
+    try:
+        telemetry_listdir = os.listdir(telemetry_path)
+    except FileNotFoundError:
+        telemetry_listdir = f"Directory NOT FOUND at: {telemetry_path}"
+
+    return {
+        "info": "Live diagnostics from the backend container.",
+        "cassette_path_used": cassette_path,
+        "cassette_path_exists": os.path.isdir(cassette_path),
+        "cassette_listdir_contents": cassette_listdir,
+        "cassette_glob_pattern": f"{cassette_path}/*-PSG.edf",
+        "cassette_glob_found_count": len(cassette_glob_results),
+        "cassette_glob_results": cassette_glob_results,
+        "telemetry_path_used": telemetry_path,
+        "telemetry_path_exists": os.path.isdir(telemetry_path),
+        "telemetry_listdir_contents": telemetry_listdir,
+        "telemetry_glob_pattern": f"{telemetry_path}/*-PSG.edf",
+        "telemetry_glob_found_count": len(telemetry_glob_results),
+        "telemetry_glob_results": telemetry_glob_results,
+    }
+
+# --- END OF NEW DEBUGGING CODE ---
 
 app.include_router(recordings_router)
 app.include_router(models_router)
+app.include_router(debug_router)
 
 
 app.add_middleware(

@@ -15,6 +15,7 @@ from src.schemas.recording_schemas import (
 from src.utils.patient import patient_from_filepath
 from src.utils.recording import Recording as RecordingUtil
 from src.utils.recording import is_valid_annotation_name, is_valid_edf_name
+from src.utils.paths import get_repo_root
 from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
@@ -24,8 +25,11 @@ from starlette.status import (
 
 router = APIRouter(prefix="/recordings", tags=["Recordings"])
 
-CASSETTE_DATA_DIR = "../example-data/sleep-cassette"
-TELEMETRY_DATA_DIR = "../example-data/sleep-telemetry"
+APP_ROOT = get_repo_root()
+DATA_DIR = f"{APP_ROOT}/data"
+
+CASSETTE_DATA_DIR = f"{DATA_DIR}/sleep-cassette"
+TELEMETRY_DATA_DIR = f"{DATA_DIR}/sleep-telemetry"
 
 
 def get_all_recordings() -> Dict[str, Dict[int, RecordingUtil]]:

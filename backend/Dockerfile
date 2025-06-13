@@ -1,6 +1,6 @@
 # /backend/ Dockerfile
 # builder stage
-FROM python:3.9-slim-bullseye AS builder
+FROM python:3.10-slim-bullseye AS builder
 
 # set the working directory
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # production stage
-FROM python:3.9-slim-bullseye
+FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 

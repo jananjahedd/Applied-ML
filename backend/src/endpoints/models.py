@@ -33,10 +33,12 @@ from src.schemas.model_schemas import (
 )
 from src.schemas.prediction_schemas import PredictEDFResponse
 from src.utils.logger import get_logger
+from src.utils.paths import get_results_dir
 
 router = APIRouter(prefix="/models", tags=["Models"])
 
-MODELS_DIR = "../results"
+MODELS_DIR = get_results_dir()
+
 AVAILABLE_CONFIGS = ["eeg", "eeg_emg", "eeg_eog", "eeg_emg_eog"]
 DEFAULT_CONFIG = ModelConfig.EEG_EMG_EOG
 
