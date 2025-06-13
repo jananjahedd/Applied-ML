@@ -49,7 +49,7 @@ app = FastAPI(
     title="Sleep Stage Prediction API",
     description=(
         "API for EDF sleep recording processing, feature extraction, "
-        "and sleep stage prediction using pre-trained SVM models. "
+        "and sleep stage prediction using pre-trained Random Forest models. "
     ),
     version="1.0.3",
     lifespan=lifespan
