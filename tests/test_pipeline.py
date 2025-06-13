@@ -2,9 +2,9 @@ import os
 import pathlib
 import pytest  # type: ignore
 from fastapi.testclient import TestClient
-from main import app
+from backend.main import app
 
-from src.utils.paths import get_repo_root
+from backend.src.utils.paths import get_repo_root
 
 client = TestClient(app)
 

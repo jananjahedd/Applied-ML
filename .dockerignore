@@ -1,0 +1,25 @@
+# prevent docker context from including build artifacts
+**/__pychache__
+**/.venv
+**/venv
+**/.env
+
+# ignore git history
+.git
+
+# ignore IDE-specific files
+.vscode/
+.idea/
+
+# exclude all data, notebooks, results and tests from all docker images
+data/
+example-data/
+notebooks/
+results/
+tests/
+environment.yml
+*.md
+*.edf
+*.csv
+*.png
+*.joblib

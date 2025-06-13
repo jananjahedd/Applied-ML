@@ -37,21 +37,42 @@ This project aims to develop a classical machine learning model for automated sl
 ## Project Structure
 ```
 .
-├── data/                    # Raw PSG data (not tracked by Git)
-├── src/                     # Source code
-│   ├── __init__.py
-│   ├── main.py              # Main script for running the pipeline
-│   ├── features/            # Feature extraction and preprocessing
-│   ├── models/              # SVM model training and evaluation
-│   └── utils/               # Utility functions (e.g., data loading)
-├── notebooks/               # Jupyter notebooks for experimentation
-├── tests/                   # Unit tests
-│   ├── features/
-│   ├── models/
-│   └── test_main.py
-├── README.md
-├── environment.yml          # Dependency management
-└── .pre-commit-config.yaml  # Pre-commit hooks configuration
+|
+|— data/                    # Raw PSG data (not tracked by Git)
+|— /example-data            # Data used for the application
+|— /notebooks               # Jupyter notebooks for experimentation
+|— /results                 # The results of the models
+|— /tests                   # Unit tests
+|
+|-- /backend
+|   |-- main.py             # Main sript for running the FASTAPI app
+|   |-- src/
+|   |   ├── __init__.py
+|   │   ├── data/           # Files for processing the data
+|   |   ├── endpoints/      # API endpoints
+|   │   ├── features/       # Feature extraction file
+|   │   ├── models/         # SVM model training and evaluation
+|   │   └── utils/          # Utility functions (e.g., paths)
+|   |   |-- schemas.py      # Schemas for the API
+|   |   |-- script.py       # Runs the complete pipeline (with training)
+|   |
+|   |-- requirements.txt    # Requirements for the backend
+|   |-- logs/               # Log files
+|   |-- Dockerfile          # Docker for the backend
+|
+|-- /frontend
+|   |-- pages/              # Scripts for the streamlit app
+|   |—- app.py              # The streamlit app
+|   |-- Dockerfile          # Docker file for frontend
+|   |—- requirements.txt    # Requirements for the frontend
+| 
+|-- .dockerignore.
+|-- .gitignore
+|-- docker-compose.yml      # File for composing both backend and frontend
+|
+|—- .pre-commit-config.yaml # Pre-commit hooks configuration
+|—- environment.yml         # Dependency management
+|—- README.md
 ```
 
 ## Data
@@ -90,7 +111,9 @@ The user has to ensure that they have `awscli` installed on their computer:
 3. **Run the main script**:
    This is used to run the entire pipeline process which includes the preprocessing of the data, splitting (with feature engineering and data augmentation) and training of the SVM models:
    ```bash
-   python src/script.py
+   cd Applied-ML/backend
+
+   python -m src.script.py
    ```
 
 4. **Experiment in Jupyter notebooks**:
@@ -123,6 +146,8 @@ Pre-commit hooks automatically run checks before each Git commit to ensure code 
 
 After activating the Anaconda environment, the user has to manually open the app:
 ```bash
+cd Applied-ML/backend
+
 uvicorn main:app --reload
 ```
 The app will start, and the user can copy the URL address and paste it on their browser with the **/docs** added at the end (e.g., `http://127.0.0.1:8000/docs`).
@@ -132,4 +157,17 @@ To run tests on the API endpoints:
 pytest tests/test_main.py
 pytest tests/test_pipeline.py
 pytest tests/test_schemas.py
+```
+
+## Compose the Docker
+
+To run the application locally, the user must open the FastAPI app, then the streamlit app. For this, we containerised both the backend and frontend (Docker files) to have a smoother approach for deployment:
+```bash
+cd Applied-ML
+
+docker-compose up --build
+```
+The user can copy-paste the URL after the application has started directly on their preferred Browser. The application is intuitive and explains the necessary steps for usage. Additionally, to stop the application, the user can type `Ctrl+C` and to remove the dockers:
+```bash
+docker-compose down
 ```

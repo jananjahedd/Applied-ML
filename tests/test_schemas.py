@@ -3,7 +3,7 @@ import pytest  # type: ignore
 from pydantic import ValidationError
 
 
-from src.schemas import (
+from backend.src.schemas import (
     PreprocessingOutput,
     UploadResponse,
     PredictionInput,

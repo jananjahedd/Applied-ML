@@ -20,6 +20,7 @@ dependencies:
   - uvicorn[standard]>=0.24.0
   - python-multipart>=0.0.6
   - pydantic>=2.0.0
+  - streamlit
   - pip:
     - autoreject>=0.4.0
     - imbalanced-learn>=0.11.0
