@@ -6,7 +6,6 @@ from os.path import basename, dirname
 from typing import Any, Dict
 
 from mne.io import read_raw_edf
-
 from src.utils.plotting import plot_signals_mne
 
 
@@ -92,6 +91,7 @@ class Recording:
         raw_data = read_raw_edf(self.file_path, preload=True, verbose=False)
         plot_signals_mne(recording=self, raw=raw_data, annotations=True)
 
+
 def is_valid_edf_name(file_name: str) -> bool:
     """Check if the file name is a valid EDF file name.
 
@@ -102,6 +102,7 @@ def is_valid_edf_name(file_name: str) -> bool:
         bool: True if the file name is valid, False otherwise.
     """
     return file_name.startswith(("ST7", "SC4")) and file_name.endswith(".edf")
+
 
 def is_valid_annotation_name(file_name: str) -> bool:
     """Check if the file name is a valid annotation file name.

@@ -1,7 +1,13 @@
-from typing import List, Optional, Dict, Any
+"""Prediction response schema for EDF files."""
+
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
+
 class PredictEDFResponse(BaseModel):
+    """Response schema for predictions made on EDF files."""
+
     model_configuration_used: str
     input_file_name: Optional[str]
     num_segments_processed: int
@@ -17,13 +23,7 @@ class PredictEDFResponse(BaseModel):
                 "epoch_duration_seconds": 30.0,
                 "annotations_from_hypnogram": True,
                 "features_extracted_per_epoch": 45,
-                "sleep_stage_distribution": {
-                    "Wake": 120,
-                    "N1": 45,
-                    "N2": 180,
-                    "N3": 90,
-                    "REM": 85
-                }
+                "sleep_stage_distribution": {"Wake": 120, "N1": 45, "N2": 180, "N3": 90, "REM": 85},
             }
-        }
-   )
+        },
+    )

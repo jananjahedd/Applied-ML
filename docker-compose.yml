@@ -10,7 +10,7 @@ services:
       - ./example-data:/app/example-data
       # link the local results to the app
       - ./results:/app/results
-  
+
   frontend:
     build:
       context: ./frontend

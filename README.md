@@ -65,7 +65,7 @@ This project aims to develop a classical machine learning model for automated sl
 |   |—- app.py              # The streamlit app
 |   |-- Dockerfile          # Docker file for frontend
 |   |—- requirements.txt    # Requirements for the frontend
-| 
+|
 |-- .dockerignore.
 |-- .gitignore
 |-- docker-compose.yml      # File for composing both backend and frontend

@@ -2,8 +2,8 @@
 
 import logging
 import pathlib
-from src.utils.paths import get_logs_dir
 
+from src.utils.paths import get_logs_dir
 
 LOGS_DIR = pathlib.Path(get_logs_dir())
 
@@ -22,8 +22,7 @@ def get_logger(name: str, log_file: str = "") -> logging.Logger:
 
     if not logger.hasHandlers():
         formatter = logging.Formatter(
-            fmt=("%(asctime)s - %(name)s - %(levelname)s - "
-                 + "%(module)s - %(funcName)s - %(message)s"),
+            fmt=("%(asctime)s - %(name)s - %(levelname)s - " + "%(module)s - %(funcName)s - %(message)s"),
             datefmt="%d-%m-%Y %H:%M:%S",
         )
 
@@ -39,9 +38,7 @@ def get_logger(name: str, log_file: str = "") -> logging.Logger:
             print(f"Error creating log directory {LOGS_DIR}: {e}")
             return logger
 
-        effective_log_file = (
-            log_file if log_file else f"{name.replace('.', '_')}.log"
-        )
+        effective_log_file = log_file if log_file else f"{name.replace('.', '_')}.log"
         log_path = LOGS_DIR / effective_log_file
 
         try:

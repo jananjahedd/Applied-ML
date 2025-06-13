@@ -3,22 +3,22 @@
 This module is context-aware and will define the correct root path
 whether it is running inside a Docker container or a local machine.
 """
+
 import os
 
-
-if os.path.isdir('/app'):
+if os.path.isdir("/app"):
     # in docker
-    APP_ROOT = '/app'
+    APP_ROOT = "/app"
 else:
     # running locally
     THIS_FILE = os.path.dirname(os.path.abspath(__file__))
-    APP_ROOT = os.path.abspath(os.path.join(THIS_FILE, '..', '..', '..'))
+    APP_ROOT = os.path.abspath(os.path.join(THIS_FILE, "..", "..", ".."))
 
 # definition of all paths for the app
-BACKEND_DIR = os.path.join(APP_ROOT, 'backend')
-SRC_DIR = os.path.join(BACKEND_DIR, 'src')
-DATA_DIR = os.path.join(APP_ROOT, 'data')
-PROCESSED_DATA_DIR = os.path.join(DATA_DIR, 'processed_data')
+BACKEND_DIR = os.path.join(APP_ROOT, "backend")
+SRC_DIR = os.path.join(BACKEND_DIR, "src")
+DATA_DIR = os.path.join(APP_ROOT, "data")
+PROCESSED_DATA_DIR = os.path.join(DATA_DIR, "processed_data")
 SPLITS_DATA_DIR = os.path.join(DATA_DIR, "data_splits")
 MODELS_DIR = os.path.join(SRC_DIR, "models")
 FEATURES_DIR = os.path.join(SRC_DIR, "features")
