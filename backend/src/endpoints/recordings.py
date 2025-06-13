@@ -301,8 +301,8 @@ async def upload_recording(
         )
 
     # Check if files already exist
-    edf_path = f"{CASSETTE_DATA_DIR}/{edf_name}"
-    hypno_path = f"{CASSETTE_DATA_DIR}/{hypno_name}"
+    edf_path = f"{CASSETTE_DATA_DIR}/{edf_name}" if edf_name.startswith("SC") else f"{TELEMETRY_DATA_DIR}/{edf_name}"
+    hypno_path = f"{CASSETTE_DATA_DIR}/{hypno_name}" if hypno_name.startswith("SC") else f"{TELEMETRY_DATA_DIR}/{hypno_name}"
     if exists(edf_path) or exists(hypno_path):
         raise HTTPException(
             status_code=HTTP_400_BAD_REQUEST,
